@@ -35,6 +35,8 @@ struct Test {
 
 Test tests[] = {
     TEST("void main() {}"),
+    ERROR("foo haha bubu"),
+    TEST("void main() { 4; }"),
 };
 
 bool verbose = false;

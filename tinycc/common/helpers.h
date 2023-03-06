@@ -10,6 +10,7 @@
 
 #define UNREACHABLE throw std::runtime_error(STR("Unreachable code at " << __FILE__ << ": " << __LINE__))
 #define NOT_IMPLEMENTED throw std::runtime_error(STR("Not implemented code at " << __FILE__ << ": " << __LINE__))
+#define ASSERT(...) if (! (__VA_ARGS__)) throw std::runtime_error(STR("Assertion failed at " << __FILE__ << ": " << __LINE__))
 
 namespace tiny {
     template<typename T>
