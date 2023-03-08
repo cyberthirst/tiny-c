@@ -13,4 +13,20 @@ namespace tiny {
     }
 
 
+    PointerType * Type::getPointerTo(Type * base) {
+        auto & t = pointerTypes();
+        auto i = t.find(base);
+        if (i == t.end())
+            i = t.insert(std::make_pair(base, new PointerType{base})).first;
+        return i->second;
+    }
+
+    FunctionType * Type::getFunction(std::vector<Type *> && sig) {
+        // TODO
+
+        return nullptr;        
+    }
+
+
+
 } // namespace tiny

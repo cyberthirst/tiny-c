@@ -9,6 +9,8 @@
 namespace tiny {
 
     class SimpleType;
+    class PointerType;
+    class FunctionType;
 
     /** Basic type class. 
      */
@@ -34,11 +36,20 @@ namespace tiny {
             return i->second;
         }
 
+        static PointerType * getPointerTo(Type * base);
+
+        static FunctionType * getFunction(std::vector<Type *> && sig);
+
 
         static std::unordered_map<Symbol, Type*> initializeTypes();
 
         static std::unordered_map<Symbol, Type*> & types() {
             static std::unordered_map<Symbol, Type*> types{initializeTypes()};
+            return types;
+        }
+
+        static std::unordered_map<Type *, PointerType*> & pointerTypes() {
+            static std::unordered_map<Type *, PointerType*> types;
             return types;
         }
 
@@ -50,5 +61,31 @@ namespace tiny {
 
     }; 
 
+    class PointerType : public Type {
+    public:
+
+        Type * base() const { return base_; }
+
+    private:    
+        friend class Type;
+
+        PointerType(Type * base):base_{base} {}
+
+        Type * base_;
+    };
+
+    class FunctionType : public Type {
+    public:
+        Type * returnType() const { return sig_[0]; }
+        Type * argType(size_t i) const { return sig_[i + 1]; }
+        size_t numArgs() const { return sig_.size() - 1; }
+
+    private:
+        friend Type;
+
+        FunctionType(std::vector<Type *> && sig):sig_{std::move(sig)} {}
+
+        std::vector<Type *> sig_;
+    }; 
 
 }

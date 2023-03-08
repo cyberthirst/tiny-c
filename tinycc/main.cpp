@@ -37,6 +37,15 @@ Test tests[] = {
     TEST("void main() {}"),
     ERROR("foo haha bubu"),
     TEST("void main() { 4; }"),
+    TEST("void main() { int i = 5; }"),
+    ERROR("void main() { int i = 5.0; }"),
+    TEST("void main() { int i; { int i; }}"),
+    ERROR("void main() { { int i; } int j = i; }"),
+    ERROR("void main() { int i; int i;}"),
+    TEST("void main() { int i; int j = i; }"),
+    TEST("void main() { if (0) {} else {}}"),
+    TEST("void main() { int * a; }"),
+    
 };
 
 bool verbose = false;
