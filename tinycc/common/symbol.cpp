@@ -59,7 +59,5 @@ namespace tiny {
     Symbol const Symbol::KwTypedef{"typedef"};
     Symbol const Symbol::KwVoid{"void"};
     Symbol const Symbol::KwWhile{"while"};
-    Symbol const Symbol::KwScan{"scan"};
-    Symbol const Symbol::KwPrint{"print"};
-
+    
 } // namespace tiny

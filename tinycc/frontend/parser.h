@@ -107,7 +107,7 @@ namespace tiny {
         bool isIdentifier(Token const & t) {
             if (t != Token::Kind::Identifier)
                 return false;
-            if (t == Symbol::KwBreak || t == Symbol::KwCase || t == Symbol::KwCast || t == Symbol::KwChar || t == Symbol::KwContinue || t == Symbol::KwDefault || t == Symbol::KwDo || t == Symbol::KwDouble || t == Symbol::KwElse || t == Symbol::KwFor || t == Symbol::KwIf || t == Symbol::KwInt || t == Symbol::KwReturn || t == Symbol::KwStruct || t == Symbol::KwSwitch || t == Symbol::KwTypedef || t == Symbol::KwVoid || t == Symbol::KwWhile || t == Symbol::KwScan || t == Symbol::KwPrint)
+            if (t == Symbol::KwBreak || t == Symbol::KwCase || t == Symbol::KwCast || t == Symbol::KwChar || t == Symbol::KwContinue || t == Symbol::KwDefault || t == Symbol::KwDo || t == Symbol::KwDouble || t == Symbol::KwElse || t == Symbol::KwFor || t == Symbol::KwIf || t == Symbol::KwInt || t == Symbol::KwReturn || t == Symbol::KwStruct || t == Symbol::KwSwitch || t == Symbol::KwTypedef || t == Symbol::KwVoid || t == Symbol::KwWhile)
                 return false;
             return true;
         }

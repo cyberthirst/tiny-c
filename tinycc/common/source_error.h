@@ -1,4 +1,5 @@
 #pragma once
+
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -56,4 +57,30 @@ namespace tiny {
 
     }; // tiny::SourceLocation
 
-}
+    class SourceError : public std::runtime_error {
+    public:
+        SourceError(char const * kind, std::string const & what, SourceLocation const & location):
+            std::runtime_error{what},
+            kind_{kind},
+            location_{location} {
+        }
+
+        char const * kind() const { return kind_; }
+
+        SourceLocation const & location() const { return location_; }
+
+    private:
+
+        friend std::ostream & operator << (std::ostream & s, SourceError const & e) {
+            s << e.kind_ << ":" << e.what() << " at " << e.location_;
+            return s;
+        }
+
+        char const * kind_;
+        SourceLocation location_;
+    };
+    
+
+
+
+} // namespace tiny

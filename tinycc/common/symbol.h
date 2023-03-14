@@ -67,8 +67,6 @@ namespace tiny {
         static Symbol const KwTypedef;
         static Symbol const KwVoid;
         static Symbol const KwWhile;
-        static Symbol const KwScan;
-        static Symbol const KwPrint;
 
         explicit Symbol(std::string const & name) {
             Symbols & s{Symbols_()};

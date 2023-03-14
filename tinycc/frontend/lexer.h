@@ -10,10 +10,16 @@
 #include <variant>
 
 #include "common/symbol.h"
-
-#include "source_location.h"
+#include "common/source_error.h"
 
 namespace tiny {
+
+    class ParserError : public SourceError {
+    public:
+        ParserError(std::string const & what, SourceLocation const & location):
+            SourceError{"ParserError", what, location} {
+        }
+    };
 
     class Token {
     public:
@@ -187,21 +193,6 @@ namespace tiny {
         }
 
     }; // tiny::Token
-
-    class ParserError : public std::runtime_error {
-    public:
-        ParserError(std::string const & what, SourceLocation const & location):
-            std::runtime_error{what},
-            location_{location} {
-        }
-
-        SourceLocation const & location() const {
-            return location_;
-        }
-
-    private:
-        SourceLocation location_;
-    };
 
     /** Lexical Analyzer.
      */

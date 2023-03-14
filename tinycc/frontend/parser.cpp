@@ -86,21 +86,9 @@ namespace tiny {
             return CONTINUE_STMT();
         else if (top() == Symbol::KwReturn)
             return RETURN_STMT();
-        else if (top() == Symbol::KwScan) {
-            Token op =  pop();
-            pop(Symbol::ParOpen);
-            pop(Symbol::ParClose);
-            return std::unique_ptr<AST>{new ASTScan{op}};
-        } else if (top() == Symbol::KwPrint) {
-            Token op =  pop();
-            pop(Symbol::ParOpen);
-            std::unique_ptr<AST> expr(EXPR());
-            pop(Symbol::ParClose);
-            return std::unique_ptr<AST>{new ASTPrint{op, std::move(expr)}};
-        } else {
+        else 
             // TODO this would produce not especially nice error as we are happy with statements too
             return EXPR_STMT();
-        }
     }
 
     /* BLOCK_STMT := '{' { STATEMENT } '}'
