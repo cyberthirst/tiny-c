@@ -158,9 +158,28 @@ namespace tiny {
             leaveFunction();
         }
 
+        /*
+            1. Typecheck the fields
+            2. Ensure we can't have duplicate names for fields
+            3. Assign the type to the struct
+            4. If (isDefinition) the mark the struct as fully defined
+        */
         void visit(ASTStructDecl * ast) override { 
-            MARK_AS_UNUSED(ast);
-            NOT_IMPLEMENTED;
+            enterBlock();
+            bool isFullyDefined = ast->isDefinition;
+            StructType *st = Type::getOrDeclareStruct(ast->name);
+            if (st->isFullyDefined() && ast->isDefinition)
+                throw TypeError{STR("Struct " << ast->name << " is already defined"), ast->location()};
+            for (auto & i : ast->fields) {
+                Type *fieldT = typecheck(i.second);
+                addVariable(i.first->name,  fieldT, i.second.get());
+                isFullyDefined &= typecheck(i.first)->isFullyDefined();
+            }
+            leaveBlock();
+
+            if (isFullyDefined)
+                st->markAsFullyDefined();
+            ast->setType(st);
         }
 
         void visit(ASTFunPtrDecl * ast) override { 
@@ -252,8 +271,27 @@ namespace tiny {
         /** We have to handle correctly the types for all unary operators in TinyC, i.e. +, -, ~, !, ++ and --. 
          */       
         void visit(ASTUnaryOp * ast) override { 
-            MARK_AS_UNUSED(ast);
-            NOT_IMPLEMENTED;
+            Type *t = typecheck(ast->arg);
+            if (ast->op == Symbol::Inc || ast->op == Symbol::Dec) {
+                if (!ast->arg->hasAddress())
+                    throw TypeError{"Pre-increment/decrement requires an addressable value", ast->location()};
+                if (!t->isNumeric() && !t->isPointer())
+                    throw TypeError{"Pre-increment/decrement requires a numeric or pointer type", ast->location()};
+            } else if (ast->op == Symbol::Add || ast->op == Symbol::Sub) {
+                if (!t->isNumeric())
+                    throw TypeError{"Unary plus/minus requires a numeric type", ast->location()};
+            } else if (ast->op == Symbol::Neg) {
+                if (!t->isIntegral())
+                    throw TypeError{"Unary bitwise not requires an integral type", ast->location()};
+            } else if (ast->op == Symbol::Not) {
+                if (!t->convertsToBool())
+                    throw TypeError{"Unary logical not requires a type that converts to bool", ast->location()};
+                ast->setType(Type::getInt());
+                return;
+            } else {
+                throw TypeError{"Unknown unary operator", ast->location()};
+            }
+            ast->setType(t);
         }
 
         /** TinyC only has two post-operands, the post-increment and post-decrement. As they both modify the value, they require
