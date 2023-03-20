@@ -72,7 +72,8 @@ namespace tiny {
             ast->setType(Type::getPointerTo(base));
         } 
 
-        /** A bit hacky, we treat arrays equally to pointers, i.e. in tinyc the sizeof array will be sizeof ptr still. A proper way would be to have an array type that would also keep the size with it and be convertible to a pointer.  
+        /** A bit hacky, we treat arrays equally to pointers, i.e. in tinyc the sizeof array will be sizeof ptr still.
+         *  A proper way would be to have an array type that would also keep the size with it and be convertible to a pointer.  
          */
         void visit(ASTArrayType * ast) override { 
             MARK_AS_UNUSED(ast);
@@ -107,7 +108,9 @@ namespace tiny {
             leaveBlock();
         }
         
-        /** Variable declaration gets the variable type, if there is a value specified for it ensures the value type corresponds to the variable type and then adds the variable to local context. If the variable already exists in current context (we allow shadowing), an error is raised. 
+        /** Variable declaration gets the variable type, if there is a value specified for it ensures the value type
+         *  corresponds to the variable type and then adds the variable to local context. If the variable already
+         *  exists in current context (we allow shadowing), an error is raised. 
          */
         void visit(ASTVarDecl * ast) override { 
             Type * t = typecheck(ast->varType);
@@ -125,7 +128,8 @@ namespace tiny {
         /** Typechecking a function simply checks that the body typechecks well.
          */
         void visit(ASTFunDecl * ast) override { 
-            // first we need to create the function type signature in the form retType..args. All types used there must be fully defined for the declaration to succeed
+            // first we need to create the function type signature in the form retType..args. All types used there must be fully
+            // defined for the declaration to succeed
             Type * returnType = typecheck(ast->returnType);
             if (! returnType->isFullyDefined())
                 throw TypeError{"Function return type must be fully defined", ast->returnType->location()};
@@ -137,10 +141,12 @@ namespace tiny {
                     throw TypeError{"Function argument type must be fully defined", i.first->location()};
                 signature.push_back(argType);
             }
-            // create the type of the function and add a global variable of the type with the name of the function so that we can get a pointer to it easily
+            // create the type of the function and add a global variable of the type with the name of the function so
+            // that we can get a pointer to it easily
             Type * ftype = Type::getFunction(signature);
             addVariable(ast->name, ftype, ast);
-            // now that the function type has been created, we can enter the function, add local variables for its arguments and then typecheck its body
+            // now that the function type has been created, we can enter the function, add local variables for its arguments
+            // and then typecheck its body
             enterFunction(returnType);
             for (auto & i : ast->args) 
                 addVariable(i.second->name, i.first->type(), i.second.get());
@@ -222,18 +228,25 @@ namespace tiny {
             returned_ = true; // mark that we have successfully returned
         }
 
-        /** Binary operators are not hard, just a bit of processing is required. We need to support all binary operators TinyC recognizes, i.e.: *, /, %, +, -, <<, >>, <, <=, >, >=, ==, !=, &, |, && and ||. 
+        /** Binary operators are not hard, just a bit of processing is required. We need to support all binary operators
+         *  TinyC recognizes, i.e.: *, /, %, +, -, <<, >>, <, <=, >, >=, ==, !=, &, |, && and ||. 
          */
         void visit(ASTBinaryOp * ast) override { 
             MARK_AS_UNUSED(ast);
             NOT_IMPLEMENTED;
         }
 
-        /** We must make sure the right hand side of the assignment has an address. Then ensure that the types match, including any implicit conversions and is ok, set own type to that of the rhs.
+        /** We must make sure the left hand side of the assignment has an address.
+         *  Then ensure that the types match, including any implicit conversions and is ok, set own type to that of the rhs.
         */
         void visit(ASTAssignment * ast) override { 
-            MARK_AS_UNUSED(ast);
-            NOT_IMPLEMENTED;
+            Type *lhs = typecheck(ast->lvalue);
+            Type *rhs = typecheck(ast->value);
+            if (!ast->lvalue->hasAddress())
+                throw TypeError{"Left hand side of assignment must have an address", ast->location()};
+            if (!rhs->convertsImplicitlyTo(lhs))
+                throw TypeError{"Left hand side of assignment must have the same type as the right hand side", ast->location()};
+            ast->setType(rhs);
         }
 
         /** We have to handle correctly the types for all unary operators in TinyC, i.e. +, -, ~, !, ++ and --. 
@@ -243,25 +256,35 @@ namespace tiny {
             NOT_IMPLEMENTED;
         }
 
-        /** TinyC only has two post-operands, the post-increment and post-decrement. As they both modify the value, they require it to has an address. Only numeric types and pointers are supported. 
+        /** TinyC only has two post-operands, the post-increment and post-decrement. As they both modify the value, they require
+         *  it to has an address. Only numeric types and pointers are supported. 
          */
         void visit(ASTUnaryPostOp * ast) override { 
-            MARK_AS_UNUSED(ast);
-            NOT_IMPLEMENTED;
-        }
+            Type *t = typecheck(ast->arg);
+            if (!ast->arg->hasAddress())
+                throw TypeError{"Post-increment/decrement requires an addressable value", ast->location()};
+            if (!t->isNumeric() && !t->isPointer())
+                throw TypeError{"Post-increment/decrement requires a numeric or pointer type", ast->location()};
+            ast->setType(t);
+        } 
         
         /** The interesting feature of the address operator is that not every value in tinyC has an address (only local variables do)
         */
         void visit(ASTAddress * ast) override { 
-            MARK_AS_UNUSED(ast);
-            NOT_IMPLEMENTED;
+            Type *t = typecheck(ast->target);
+            if (!ast->target->hasAddress())
+                throw TypeError{"Cannot take address of a value that does not have an address", ast->location()};
+            ast->setType(Type::getPointerTo(t));
         }
 
         /** Only pointers can be dereferenced, in which case the result is their base type.
          */
         void visit(ASTDeref * ast) override { 
-            MARK_AS_UNUSED(ast);
-            NOT_IMPLEMENTED;
+            Type *t = typecheck(ast->target);
+            if (!t->isPointer())
+                throw TypeError{"Cannot dereference a non-pointer type", ast->location()};
+            PointerType *ptr = static_cast<PointerType*>(t);
+            ast->setType(ptr->base());
         }
 
         /** Only pointers can be indexed.
@@ -390,6 +413,7 @@ namespace tiny {
         }
 
         Type * getVariable(Symbol name) {
+            //i<e: loop until overflow
             for (size_t i = contexts_.size() - 1, e = contexts_.size(); i < e; --i) {
                 auto it = contexts_[i].locals.find(name);
                 if (it != contexts_[i].locals.end())
@@ -408,7 +432,9 @@ namespace tiny {
             return result;
         }   
 
-        /** We use this to track that the AST subtree we just typechecked had a valid return on all its control flow paths. This means we need to clear the flag in every statement and set the flag in return. Special handling is necessary at junctions such as after if or switch.
+        /** We use this to track that the AST subtree we just typechecked had a valid return on all its control flow paths.
+         *  This means we need to clear the flag in every statement and set the flag in return. Special handling is
+         *  necessary at junctions such as after if or switch.
          */
         bool returned_ = false;
 

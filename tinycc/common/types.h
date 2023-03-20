@@ -37,7 +37,8 @@ namespace tiny {
          */
         virtual size_t size() const = 0;
 
-        /** Returns whether the type is fully defined. This is by default true for all types, but we will override this behavior for structs to allow forward declarations. 
+        /** Returns whether the type is fully defined. This is by default true for all types, but we will override this behavior for structs to allow
+         *  forward declarations. 
          */
         virtual bool isFullyDefined() const { return true; }
 

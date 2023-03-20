@@ -1,6 +1,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <iostream>
+#include <sstream>
 
 #include "common/options.h"
 #include "common/colors.h"
@@ -45,7 +46,6 @@ Test tests[] = {
     TEST("int bar(int i) { if (i) return 10; else return 5; } int main() { return bar(5); }", 10),
     TEST("void bar(int * i) { *i = 10; } int main() { int i = 1; bar(&i); return i; }", 10),
 
-  #ifdef foo  
 /*    TEST("void main(int a, int b) {}"),
     TEST("void main(int a, int b) { 1 * 2; }"),
     TEST("void main(int a, int b) { a * b; }"),
@@ -79,10 +79,10 @@ Test tests[] = {
     TEST("int main(int x) { return main(x); }"),
     TEST("int a = 56; int main() { return a; }"),
     TEST("double b = 6.7; int main() { int a = 1; return a; }"),
-    TEST("struct Foo { }; void main(Foo x) {}"),
-    ERROR("struct Foo; void main(Foo x) {}", TypeError),
-    TEST("struct Foo; struct Foo { int i; }; void main(Foo x) {}"),
-    ERROR("struct Foo; struct Foo { int i; }; struct Foo { int i; }; void main(Foo x) {}", TypeError),
+    //TEST("struct Foo { }; void main(Foo x) {}"),
+    //ERROR("struct Foo; void main(Foo x) {}", TypeError),
+    //TEST("struct Foo; struct Foo { int i; }; void main(Foo x) {}"),
+    //ERROR("struct Foo; struct Foo { int i; }; struct Foo { int i; }; void main(Foo x) {}", TypeError),
     TEST("int main(int argc) { return argc++; }"),
     TEST("double main(double argc) { return argc++; }"),
     TEST("char main(char argc) { return argc++; }"),
@@ -179,7 +179,6 @@ Test tests[] = {
     int main() { \
         return fact(10); \
     }"),
-#endif
 };
 
 bool compile(std::string const & contents, Test const * test) {
