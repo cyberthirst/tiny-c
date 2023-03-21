@@ -158,12 +158,7 @@ namespace tiny {
             leaveFunction();
         }
 
-        /*
-            1. Typecheck the fields
-            2. Ensure we can't have duplicate names for fields
-            3. Assign the type to the struct
-            4. If (isDefinition) the mark the struct as fully defined
-        */
+      
         void visit(ASTStructDecl * ast) override { 
             enterBlock();
             bool isFullyDefined = ast->isDefinition;
@@ -250,9 +245,80 @@ namespace tiny {
         /** Binary operators are not hard, just a bit of processing is required. We need to support all binary operators
          *  TinyC recognizes, i.e.: *, /, %, +, -, <<, >>, <, <=, >, >=, ==, !=, &, |, && and ||. 
          */
-        void visit(ASTBinaryOp * ast) override { 
-            MARK_AS_UNUSED(ast);
-            NOT_IMPLEMENTED;
+        void visit(ASTBinaryOp * ast) override {
+            Type *l =  typecheck(ast->left);
+            Type *r =  typecheck(ast->right);
+            Type *res = nullptr;
+            //logical and && and or ||
+            if (ast->op == Symbol::And || ast->op == Symbol::Or) {
+                // for && and || we need to check that the left hand side converts to bool and then typecheck the right hand side
+                // and then check that the right hand side converts to bool
+                if (!l->convertsToBool())
+                    throw TypeError{STR("Left hand side of " << ast->op << " must convert to bool, but " << *ast->left->type() << " found"), ast->left->location()};
+                if (!r->convertsToBool())
+                    throw TypeError{STR("Right hand side of " << ast->op << " must convert to bool, but " << *ast->right->type() << " found"), ast->right->location()};
+                ast->setType(Type::getInt());
+            }
+            else if (ast->op == Symbol::BitAnd || ast->op == Symbol::BitOr) {
+                if (l != r) {
+                    throw TypeError{STR("Both sides of " << ast->op << " must be of the same type, but " << *ast->left->type() << " and " << *ast->right->type() << " found"), ast->location()};
+                }
+                if (!l->isIntegral()) {
+                    throw TypeError{STR("Both sides of " << ast->op << " must be integral, but " << *ast->left->type() << " and " << *ast->right->type() << " found"), ast->location()};
+                }
+                ast->setType(l);
+            }
+            else if (ast->op == Symbol::Mod) {
+                if (!l->isIntegral() || !r->isIntegral()) {
+                    throw TypeError{STR("Modulo operator can only be applied to integral types, but " << *l << " and " << *r << " found"), ast->location()};
+                }
+                ast->setType(l);
+            }
+            else if (ast->op == Symbol::Add || ast->op == Symbol::Sub) {
+                if (l->isPointer()) {
+                    if (r != Type::getInt()) {
+                        throw TypeError{STR("For pointer arithmetic the right hand side must be an integer, but " << *ast->right->type() << " found"), ast->right->location()};
+                    }
+                    ast->setType(l);
+                } 
+                else {
+                    res = getArithmeticResult(l,r);
+                    if (!res) {
+                        throw TypeError{STR("Cannot apply " << ast->op << " to " << *l << " and " << *r), ast->location()};
+                    }
+                    ast->setType(res);
+                }
+            }
+            else if (ast->op == Symbol::Mul || ast->op == Symbol::Div) {
+                res = getArithmeticResult(l, r);
+                if (!res) {
+                    throw TypeError{STR("Cannot apply " << ast->op << " to " << *l << " and " << *r), ast->location()};
+                }
+                ast->setType(res);
+            }
+            else if (ast->op == Symbol::Lte || ast->op == Symbol::Gte || ast->op == Symbol::Lt || ast->op == Symbol::Gt) {
+                if ((!l->isPointer() && !l->isNumeric()) || (!r->isPointer() && (!r->isNumeric()))) 
+                    throw TypeError(STR("Only pointers and numeric types can be compared but " << *l << " and " << *r << " found"), ast->location());
+                ast->setType(Type::getInt());
+            }
+            else if (ast->op == Symbol::Eq || ast->op == Symbol::NEq) {
+                if (!l->convertsImplicitlyTo(r) && !(r->convertsImplicitlyTo(l)))
+                    throw TypeError(STR("Types " << *l << " and " << *r << " cannot be compared"), ast->location());
+                ast->setType(Type::getInt());
+            }
+            else if (ast->op == Symbol::ShiftRight || ast->op == Symbol::ShiftLeft) {
+                if (l != Type::getInt()) {
+                    throw TypeError{STR("Left hand side of " << ast->op << " must be an integer, but " << *ast->left->type() << " found"), ast->left->location()};
+                }
+                if(!r->isIntegral()) {
+                    throw TypeError{STR("Right hand side of " << ast->op  <<  " must be integral, but " << *ast->right->type() << " found"), ast->right->location()};
+                }
+                ast->setType(Type::getInt());
+            }
+            else {
+                //should be handled by the parser - we should never get an unknown operator here
+                throw TypeError{STR("Unknown operator " << ast->op), ast->location()};
+            }
         }
 
         /** We must make sure the left hand side of the assignment has an address.

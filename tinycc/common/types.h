@@ -46,6 +46,8 @@ namespace tiny {
          */
         virtual bool convertsToBool() const { return false; }
 
+        virtual bool isIntegral() const { return false; }
+
         virtual bool isPointer() const { return false; }
 
         virtual bool isNumeric() const { return false; }
@@ -126,6 +128,10 @@ namespace tiny {
 
         bool isNumeric() const override {
             return name_ == Symbol::KwInt || name_ == Symbol::KwDouble || name_ == Symbol::KwChar;
+        }
+
+        bool isIntegral() const override {
+            return name_ == Symbol::KwInt || name_ == Symbol::KwChar;
         }
 
         /** TinyC supports conversion from larger numeric type to smaller one, or from an int to pointer.
