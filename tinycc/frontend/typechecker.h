@@ -207,19 +207,27 @@ namespace tiny {
         }
 
         void visit(ASTWhile * ast) override { 
-            MARK_AS_UNUSED(ast);
-            NOT_IMPLEMENTED;
+            if(!typecheck(ast->cond)->convertsToBool())
+                throw TypeError{STR("Condition must convert to bool, but " << *ast->cond->type() << " found"), ast->cond->location()};
+            typecheck(ast->body);
+            ast->setType(Type::getVoid());
+            
         }
 
         void visit(ASTDoWhile * ast) override { 
-            MARK_AS_UNUSED(ast);
-            NOT_IMPLEMENTED;
+            if(!typecheck(ast->cond)->convertsToBool())
+                throw TypeError{STR("Condition must convert to bool, but " << *ast->cond->type() << " found"), ast->cond->location()};
+            typecheck(ast->body);
+            ast->setType(Type::getVoid());
         }
 
         void visit(ASTFor * ast) override { 
-            MARK_AS_UNUSED(ast);
-            NOT_IMPLEMENTED;
-         }
+            typecheck(ast->init);
+            if(!typecheck(ast->cond)->convertsToBool())
+                throw TypeError{STR("Condition must convert to bool, but " << *ast->cond->type() << " found"), ast->cond->location()};
+            typecheck(ast->increment);
+            typecheck(ast->body);
+        }
 
         /** No typechecking here */
         void visit(ASTBreak * ast) override { 
