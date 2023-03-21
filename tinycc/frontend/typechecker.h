@@ -48,8 +48,7 @@ namespace tiny {
         }
         
         void visit(ASTString * ast) override { 
-            MARK_AS_UNUSED(ast);
-            NOT_IMPLEMENTED;
+            ast->setType(Type::getPointerTo(Type::getChar()));
         }
 
         /** Verify the variable exists, raise an error if not, otherwise set type the type of the variable.
@@ -76,8 +75,11 @@ namespace tiny {
          *  A proper way would be to have an array type that would also keep the size with it and be convertible to a pointer.  
          */
         void visit(ASTArrayType * ast) override { 
-            MARK_AS_UNUSED(ast);
-            NOT_IMPLEMENTED;
+            Type *sz = typecheck(ast->size);
+            Type *b = typecheck(ast->base);
+            if (!sz->isIntegral())
+                throw TypeError{STR("Array base type must be integral, not " << *b), ast->location()};
+            ast->setType(Type::getPointerTo(Type::getPointerTo(b)));
         }
         
         /** For a named type, we need it to be present in the known types, otherwise it is a failure. 
@@ -178,9 +180,24 @@ namespace tiny {
         }
 
         void visit(ASTFunPtrDecl * ast) override { 
-            MARK_AS_UNUSED(ast);
-            NOT_IMPLEMENTED;
-
+            // first we need to create the function type signature in the form retType..args. All types used there must be fully
+            // defined for the declaration to succeed
+            Type * returnType = typecheck(ast->returnType);
+            if (! returnType->isFullyDefined())
+                throw TypeError{"Function return type must be fully defined", ast->returnType->location()};
+            std::vector<Type*> signature;
+            signature.push_back(returnType);
+            for (auto & i : ast->args) {
+                Type * argType = typecheck(i);
+                if (! argType->isFullyDefined())
+                    throw TypeError{"Function argument type must be fully defined", i->location()};
+                signature.push_back(argType);
+            }
+            // create the type of the function and add a global variable of the type with the name of the function so
+            // that we can get a pointer to it easily
+            Type *t = Type::getPointerTo(Type::getFunction(signature));
+            Type::createAlias(ast->name->name, t);
+            ast->setType(t);
         }
 
         void visit(ASTIf * ast) override {
@@ -402,12 +419,18 @@ namespace tiny {
         /** Only pointers can be indexed.
          */
         void visit(ASTIndex * ast) override { 
-            MARK_AS_UNUSED(ast);
-            NOT_IMPLEMENTED;
+            Type *i = typecheck(ast->index); 
+            Type *b = typecheck(ast->base);
+            auto *p = dynamic_cast<PointerType*>(b);
+            if (!p)
+                throw TypeError{"Cannot index a non-pointer type", ast->location()};
+            if (!i->isIntegral())
+                throw TypeError{"Cannot index with a non-integral type", ast->location()};
+            ast->setType(p->base());
         }
 
         void visit(ASTMember * ast) override { 
-            StructType * baseType = dynamic_cast<StructType*>(typecheck(ast->base));
+            auto * baseType = dynamic_cast<StructType*>(typecheck(ast->base));
             if (baseType == nullptr)
                 throw TypeError(STR("Cannot take field from a non-struct type " << *(ast->type())), ast->location());
             if (! baseType->isFullyDefined())
@@ -420,13 +443,23 @@ namespace tiny {
 
         /** Similar to AST member, but we must make sure that where we take the field from is a pointer and dereference it first */
         void visit(ASTMemberPtr * ast) override { 
-            MARK_AS_UNUSED(ast);
-            NOT_IMPLEMENTED;
+           auto * p = dynamic_cast<PointerType*>(typecheck(ast->base));
+            if (p == nullptr)
+                throw TypeError(STR("Only a pointer can appear left of ->, but " << *(ast->type()) << " found"), ast->location());
+            auto * baseType = dynamic_cast<StructType*>(p->base());
+            if (baseType == nullptr)
+                throw TypeError(STR("Cannot take field from a non-struct type " << *(ast->type())), ast->location());
+            if (! baseType->isFullyDefined())
+                throw TypeError(STR("Cannot take field from a not fully defined type " << *baseType), ast->location());
+            Type * t = (*baseType)[ast->member];
+            if (t == nullptr)
+                throw TypeError(STR("Struct of type " << *baseType << " does not have field " << ast->member.name()), ast->location());
+            ast->setType(t);
         }
         
         void visit(ASTCall * ast) override { 
             Type * t = typecheck(ast->function);
-            FunctionType * ft = dynamic_cast<FunctionType*>(t);
+            auto * ft = dynamic_cast<FunctionType*>(t);
             if (ft == nullptr) 
                 throw TypeError{STR("Expected function, but value of " << *t << " found"), ast->location()};
             if (ast->args.size() != ft->numArgs())
