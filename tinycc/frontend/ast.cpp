@@ -5,6 +5,13 @@ namespace tiny {
     using namespace colors;
 
 
+    bool ASTBinaryOp::hasAddress() const {
+        return false;
+    }
+
+    bool ASTUnaryOp::hasAddress() const {
+        return false;
+    }
 
 
 
@@ -25,20 +32,36 @@ namespace tiny {
     }
 
     void ASTSequence::print(colors::ColorPrinter & p) const {
-        auto i = body.begin();
-        if (i != body.end()) {
-            p << **i;
-            while (++i != body.end())
-                p << SYMBOL(", ") << **i;
+        if (Options::rawAST) {
+            p << SYMBOL("(") << KEYWORD("ASTBlock") << INDENT;
+            for (auto & i : body) {
+                p << NEWLINE << *i;
+            }
+            p << DEDENT << NEWLINE << SYMBOL(")") << NEWLINE;
+        } else {
+            auto i = body.begin();
+            if (i != body.end()) {
+                p << **i;
+                while (++i != body.end())
+                    p << SYMBOL(", ") << **i;
+            }
         }
     }
 
     void ASTBlock::print(colors::ColorPrinter & p) const {
-        p << SYMBOL("{") << INDENT;
-        for (auto & i : body) {
-            p << NEWLINE << *i;
+        if (Options::rawAST) {
+            p << SYMBOL("(") << KEYWORD("ASTBlock") << INDENT;
+            for (auto & i : body) {
+                p << NEWLINE << *i;
+            }
+            p << DEDENT << NEWLINE << SYMBOL(")") << NEWLINE;
+        } else {
+            p << SYMBOL("{") << INDENT;
+            for (auto & i : body) {
+                p << NEWLINE << *i;
+            }
+            p << DEDENT << NEWLINE << SYMBOL("}") << NEWLINE;
         }
-        p << DEDENT << NEWLINE << SYMBOL("}") << NEWLINE;
     }
 
     void ASTStructDecl::print(colors::ColorPrinter & p) const {

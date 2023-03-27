@@ -11,12 +11,12 @@ namespace tiny {
         TODO the simple try & fail & try something else produces ugly error messages.
         */
     std::unique_ptr<AST> Parser::PROGRAM() {
-        std::unique_ptr<ASTBlock> result{new ASTBlock{top()}};
+        std::unique_ptr<ASTProgram> result{new ASTProgram{top()}};
         while (! eof()) {
             if (top() == Symbol::KwStruct) {
-                result->body.push_back(STRUCT_DECL());
+                result->statements.push_back(STRUCT_DECL());
             } else if (top() == Symbol::KwTypedef) {
-                result->body.push_back(FUNPTR_DECL());
+                result->statements.push_back(FUNPTR_DECL());
             } else {
                 // it can be either function or variable declaration now, we just do the dirty trick by first parsing the type and identifier to determine whether we re dealing with a function or variable declaration, then revert the parser and parser the proper nonterminal this time
                 Position x = position();
@@ -24,10 +24,10 @@ namespace tiny {
                 IDENT();
                 if (top() == Symbol::ParOpen) {
                     revertTo(x);
-                    result->body.push_back(FUN_DECL());
+                    result->statements.push_back(FUN_DECL());
                 } else {
                     revertTo(x);
-                    result->body.push_back(VAR_DECLS());
+                    result->statements.push_back(VAR_DECLS());
                     pop(Symbol::Semicolon);
                 }
             }
@@ -392,7 +392,10 @@ namespace tiny {
         result->body.push_back(EXPR());
         while (condPop(Symbol::Comma))
             result->body.push_back(EXPR());
-        return result;
+        if (result->body.size() == 1)
+            return std::move(result->body[0]);
+        else
+            return result;
     }
 
 

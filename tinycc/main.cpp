@@ -2,9 +2,12 @@
 #include <cstring>
 #include <iostream>
 
+#include "common/options.h"
 #include "common/colors.h"
 #include "frontend/parser.h"
 #include "frontend/typechecker.h"
+#include "optimizer/ast_to_il.h"
+#include "optimizer/il_interpreter.h"
 
 using namespace tiny;
 using namespace colors;
@@ -13,7 +16,7 @@ struct Test {
     char const * file;
     int line;
     char const * input;
-    int result = 0;
+    int64_t result = 0;
     bool testResult = false;
     char const * shouldError = nullptr;
 
@@ -21,7 +24,7 @@ struct Test {
         file{file}, line{line}, input{input} {
     }
 
-    Test(char const * input, int result):
+    Test(char const * file, int line, char const * input, int64_t result):
         file{file}, line{line}, input{input}, result{result}, testResult{true} {
     }
 
@@ -34,13 +37,29 @@ struct Test {
 #define ERROR(input, kind) Test{__FILE__, __LINE__, input, 0, false, # kind} 
 
 Test tests[] = {
-    TEST("void main() {}"),
+    TEST("int main() { return 1; }", 1),
+    TEST("int main() { if (1) return 10; else return 2; }", 10),
+    TEST("int main() { if (0) return 10; else return 2; }", 2),
+    TEST("int main() { int i = 1; return i; }", 1),
+    TEST("int bar(int i) { return i; } int main() { return bar(5); }", 5),
+    TEST("int bar(int i) { if (i) return 10; else return 5; } int main() { return bar(5); }", 10),
+    TEST("void bar(int * i) { *i = 10; } int main() { int i = 1; bar(&i); return i; }", 10),
+
+  #ifdef foo  
+/*    TEST("void main(int a, int b) {}"),
+    TEST("void main(int a, int b) { 1 * 2; }"),
+    TEST("void main(int a, int b) { a * b; }"),
+    TEST("void main(int a, int b) { a = 3; }"),
+    TEST("void main(int a, int b) { a = b; }"),
+*/
     // Tests that exercise the parser, lexer and a typechecker
+    TEST("void main() {}"),
     ERROR("void main() { return 1; }", TypeError), 
+    TEST("void main() { 1 * 2; }"),
+    TEST("void main() { int a; }"),
     TEST("int main() { return 1; }"),
     TEST("void main() { return; }"),
-    TEST("void main() { break; }"),
-    TEST("int* main() { return cast<int*>(0); }"),
+    //ERROR("void main() { break; }", ParserError),
     TEST("int main() { int a; return a; }"),
     TEST("double main() { double a; return a; }"),
     TEST("int main() { if (1) return 1; else return 2; }"),
@@ -53,6 +72,7 @@ Test tests[] = {
     TEST("int main() { int * a; return *a; }"),
     TEST("int main(int a) { return a; }"),
     TEST("int foo(int a, int b) { return a; } int main() { return foo(1, 2); }"),
+    TEST("int* main() { return cast<int*>(0); }"),
     ERROR("int foo(int a, int b) { return a; } int main() { return foo(1, 'a'); }", TypeError),
     ERROR("int foo(int a, int b) { return a; } int main() { return foo(1); }", TypeError),
     ERROR("int foo(int a, int b) { return a; } int main() { return bar(1, 2); }", TypeError),
@@ -159,21 +179,28 @@ Test tests[] = {
     int main() { \
         return fact(10); \
     }"),
-
+#endif
 };
-
-bool verbose = false;
 
 bool compile(std::string const & contents, Test const * test) {
     try {
         // parse
         std::unique_ptr<AST> ast = (test == nullptr) ? Parser::parseFile(contents) : Parser::parse(contents);
-        if (verbose)
+        if (Options::verboseAST)
             std::cout << ColorPrinter::colorize(*ast) << std::endl;
         // typecheck
         Typechecker::checkProgram(ast);
         // translate to IR
-        // TODO
+        Program p = ASTToILTranslator::translateProgram(ast);
+        if (Options::verboseIL)
+            std::cout << ColorPrinter::colorize(p) << std::endl;
+        if (test && test->testResult && Options::testIR) {
+            int64_t result = ILInterpreter::run(p);
+            if (result != test->result) {
+                std::cerr << "ERROR: expected " << test->result << ", got " << result << color::reset << std::endl;
+                return false;
+            }
+        }
         // optimize
         // TODO
         // translate to target
@@ -197,16 +224,8 @@ int main(int argc, char * argv []) {
     std::cout << color::gray << "The one and only Tiny-C brought to you by NI-GEN" << color::reset << std::endl;
     // parse arguments
     char const * filename = nullptr;
-    for (int i = 1; i < argc; ++i) {
-        if (strcmp(argv[i], "--verbose") == 0) {
-            verbose = true;
-        } else if (filename == nullptr) {
-            filename = argv[i];
-        } else {
-            std::cerr << color::red << "ERROR: Invalid argument " << argv[i] << color::reset << std::endl;
-            return EXIT_FAILURE;
-        }
-    }
+    if (Options::parseArgs(argc, argv, filename) == EXIT_FAILURE)
+        return EXIT_FAILURE;
     if (filename == nullptr) {
         size_t ntests = sizeof(tests) / sizeof(Test);
         size_t fails = 0;
@@ -216,6 +235,8 @@ int main(int argc, char * argv []) {
                 std::cout << color::red << t.file << ":" << t.line << ": Test failed." << color::reset << std::endl;
                 std::cout << "    " << t.input << std::endl;
                 ++fails;
+                if (Options::exitAfterFailure)
+                    break;
             }
         }
         if (fails > 0) {

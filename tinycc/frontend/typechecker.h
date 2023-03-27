@@ -29,6 +29,12 @@ namespace tiny {
         */
         void visit(AST * ast) override { MARK_AS_UNUSED(ast); UNREACHABLE; }
         
+        void visit(ASTProgram * ast) override { 
+            for (auto & s : ast->statements)
+                typecheck(s);
+            ast->setType(Type::getVoid());
+        }
+
         void visit(ASTInteger * ast) override { 
             ast->setType(Type::getInt());
         }

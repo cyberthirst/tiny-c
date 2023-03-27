@@ -289,6 +289,13 @@ namespace colors {
         };
     }
 
+    inline ColorPrinter::ManipulatorStr COMMENT(std::string const & str) {
+        return ColorPrinter::ManipulatorStr{
+            [](ColorPrinter & p, std::string const & s) { p << p.comment << s; },
+            str
+        };
+    }
+
     inline ColorPrinter::ManipulatorStr SYMBOL(std::string const & str) {
         return ColorPrinter::ManipulatorStr{
             [](ColorPrinter & p, std::string const & s) { p << p.symbol << s; },

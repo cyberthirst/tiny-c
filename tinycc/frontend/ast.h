@@ -5,6 +5,7 @@
 
 #include "common/helpers.h"
 #include "common/colors.h"
+#include "common/options.h"
 #include "common/symbol.h"
 
 #include "lexer.h"
@@ -44,6 +45,16 @@ namespace tiny {
             type_ = t;
         }
 
+        /** Returns true if the result of the expression has an address.
+
+            A bit simplified version of l-values from C++. This is important for two things:
+
+            1) an address (ASTAddress) can only be obtained of expressions that have address themselves.
+            2) only elements that have address can be assigned to
+         */
+        virtual bool hasAddress() const {
+            return false;
+        }
 
         virtual void print(colors::ColorPrinter & p) const = 0;
 
@@ -71,6 +82,39 @@ namespace tiny {
         return p;
     }
 
+    /** Special AST node representing the whole program. 
+     
+        Comprises of a list of elements, which can be either variable or type declarations or functions. We could have used ASTBlock for those purposes, but having a dedicated AST simplifies the further steps such as typechecking and translation. 
+    */
+    class ASTProgram : public AST {
+    public:
+        std::vector<std::unique_ptr<AST>> statements;
+
+        ASTProgram(Token const & t):
+            AST{t} {
+        }
+
+        void print(colors::ColorPrinter & p) const override {
+            using namespace colors;
+            if (Options::rawAST) {
+                p << SYMBOL("(") << KEYWORD("ASTProgram") << INDENT;
+                for (auto & i : statements) {
+                    p << NEWLINE << *i;
+                }
+                p << DEDENT << NEWLINE << SYMBOL(")") << NEWLINE;
+            } else {
+                for (auto & i : statements) {
+                    p << NEWLINE << *i;
+                }
+            }
+        }
+
+    protected:
+
+        void accept(ASTVisitor * v) override;
+
+    }; // ASTProgram
+
     class ASTInteger : public AST {
     public:
         int64_t value;
@@ -81,7 +125,11 @@ namespace tiny {
         }
 
         void print(colors::ColorPrinter & p) const override {
-            p << value;
+            using namespace colors;
+            if (Options::rawAST)
+                p << SYMBOL("(") << KEYWORD("ASTInteger") << ", value" << SYMBOL(":") << value << ")";
+            else 
+                p << value;
         }
 
     protected:
@@ -163,6 +211,11 @@ namespace tiny {
             name{t.valueSymbol()} {
         }
 
+        /** An identifier in read position is a variable read and all variables have addresses.
+         */
+        bool hasAddress() const override {
+            return true;
+        }
 
         void print(colors::ColorPrinter & p) const override {
             p << name;
@@ -278,6 +331,13 @@ namespace tiny {
             AST{t} {
         }
 
+        /** The result of sequence has address if its last element has address as the last element is what is returned.
+         */
+        bool hasAddress() const override {
+            if (body.empty())
+                return false;
+            return body.back()->hasAddress();
+        }
 
         void print(colors::ColorPrinter & p) const override;
 
@@ -340,14 +400,24 @@ namespace tiny {
         }
 
         void print(colors::ColorPrinter & p) const override {
-            p << (*returnType) << " " << p.identifier << name.name() << p.symbol << "(";
-            auto i = args.begin();
-            if (i != args.end()) {
-                p << *(i->first) << " " << *(i->second);
-                while (++i != args.end())
-                    p << p.symbol << ", " << *(i->first) << " " << *(i->second);
+            using namespace colors;
+            if (Options::rawAST) {
+                p << SYMBOL("(") << KEYWORD("ASTBlock") << INDENT;
+                p << NEWLINE << "name" << SYMBOL(": ") << IDENT(name.name());
+                p << NEWLINE << "returnType" << SYMBOL(": ") << (*returnType);
+                p << NEWLINE << "args" << SYMBOL(": ") << INDENT;
+                p << DEDENT;
+                p << DEDENT << NEWLINE << SYMBOL(")") << NEWLINE;
+            } else {
+                p << (*returnType) << " " << p.identifier << name.name() << p.symbol << "(";
+                auto i = args.begin();
+                if (i != args.end()) {
+                    p << *(i->first) << " " << *(i->second);
+                    while (++i != args.end())
+                        p << p.symbol << ", " << *(i->first) << " " << *(i->second);
+                }
+                p << p.symbol << ")" << (*body);
             }
-            p << p.symbol << ")" << (*body);
         }
 
     protected:
@@ -583,6 +653,9 @@ namespace tiny {
             right{std::move(right)} {
         }
 
+        /** Whether a result of binary operator has an address depends on the operation and operands.
+         */
+        bool hasAddress() const override;
 
         void print(colors::ColorPrinter & p) const override {
             p << *left << " " << p.symbol << op.name() << " " << *right;
@@ -607,6 +680,9 @@ namespace tiny {
             value{std::move(value)} {
         }
 
+        /** Assignment result always has address of the lvalue it assigns to.
+         */
+        bool hasAddress() const override { return true; }
 
         void print(colors::ColorPrinter & p) const override {
             p << *lvalue << " " << p.symbol << op.name() << " " << *value;
@@ -629,6 +705,9 @@ namespace tiny {
             arg{std::move(arg)} {
         }
 
+        /** Whether a result of unary operator has an address depends on the operation and operands.
+         */
+        bool hasAddress() const override;
 
         void print(colors::ColorPrinter & p) const override {
             p << p.symbol << op.name() << *arg;
@@ -655,6 +734,11 @@ namespace tiny {
             arg{std::move(arg)} {
         }
 
+        /** As the result of post-increment or decrement is the previous value, it is now a temporary and therefore does not have an address.
+
+            NOTE: The default behavior is identical, but this method is included for clarity.
+         */
+        bool hasAddress() const override { return false; }
 
         void print(colors::ColorPrinter & p) const override {
             p << *arg << p.symbol << op.name();
@@ -694,6 +778,11 @@ namespace tiny {
             target{std::move(target)} {
         }
 
+        /** The dereferenced item always has address as it was obtained by following a pointer in the first place.
+         */
+        bool hasAddress() const override {
+            return true;
+        }
 
         void print(colors::ColorPrinter & p) const override {
             p << p.symbol << "*" << *target;
@@ -716,6 +805,11 @@ namespace tiny {
             index{std::move(index)} {
         }
 
+        /** If the base has address, then its element must have address too.
+         */
+        bool hasAddress() const override {
+            return base->hasAddress();
+        }
 
         void print(colors::ColorPrinter & p) const override {
             p << *base << p.symbol << "[" << *index << p.symbol << "]";
@@ -738,6 +832,11 @@ namespace tiny {
             member(member) {
         }
 
+        /** If the base has address, then its element must have address too.
+         */
+        bool hasAddress() const override {
+            return base->hasAddress();
+        }
 
         void print(colors::ColorPrinter & p) const override {
             p << *base << p.symbol << "." << p.identifier << member.name();
@@ -760,6 +859,9 @@ namespace tiny {
             member(member) {
         }
 
+        /** Since member of pointer's rhs must have an address (it's a pointer), the element must have address as well.
+         */
+        bool hasAddress() const override { return true; }
 
         void print(colors::ColorPrinter & p) const override {
             p << *base << p.symbol << "->" << p.identifier << member.name();
@@ -809,6 +911,9 @@ namespace tiny {
             type{std::move(type)} {
         }
 
+        /** Casts can only appear on right hand side of assignments.
+         */
+        bool hasAddress() const override { return false; }
 
         void print(colors::ColorPrinter & p) const override {
             p << p.keyword << "cast" << p.symbol << "<" << (*type) << p.symbol << ">(" << *value << p.symbol << ")";
@@ -829,6 +934,9 @@ namespace tiny {
             value{std::move(value)}{
         }
 
+        /** Writes can only appear on right hand side of assignments.
+         */
+        bool hasAddress() const override { return false; }
 
         void print(colors::ColorPrinter & p) const override {
             p << p.keyword << "print(" << *value << p.symbol << ")";
@@ -846,6 +954,9 @@ namespace tiny {
             AST{t}{
         }
 
+        /** Reads can only appear on right hand side of assignments.
+         */
+        bool hasAddress() const override { return false; }
 
         void print(colors::ColorPrinter & p) const override {
             p << p.keyword << "write()";
@@ -861,6 +972,7 @@ namespace tiny {
     public:
 
         virtual void visit(AST * ast) { MARK_AS_UNUSED(ast); NOT_IMPLEMENTED; }
+        virtual void visit(ASTProgram * ast) { MARK_AS_UNUSED(ast); NOT_IMPLEMENTED; }
         virtual void visit(ASTInteger * ast) { MARK_AS_UNUSED(ast); NOT_IMPLEMENTED; }
         virtual void visit(ASTDouble * ast) { MARK_AS_UNUSED(ast); NOT_IMPLEMENTED; }
         virtual void visit(ASTChar * ast) { MARK_AS_UNUSED(ast); NOT_IMPLEMENTED; }
@@ -911,6 +1023,7 @@ namespace tiny {
     }; // tinyc::ASTVisitor
 
     inline void AST::accept(ASTVisitor * v) { v->visit(this); }
+    inline void ASTProgram::accept(ASTVisitor * v) { v->visit(this); }
     inline void ASTInteger::accept(ASTVisitor * v) { v->visit(this); }
     inline void ASTDouble::accept(ASTVisitor* v) { v->visit(this); }
     inline void ASTChar::accept(ASTVisitor * v) { v->visit(this); }
