@@ -79,7 +79,7 @@ namespace tiny {
             Type *b = typecheck(ast->base);
             if (!sz->isIntegral())
                 throw TypeError{STR("Array base type must be integral, not " << *b), ast->location()};
-            ast->setType(Type::getPointerTo(Type::getPointerTo(b)));
+            ast->setType(Type::getPointerTo(b));
         }
         
         /** For a named type, we need it to be present in the known types, otherwise it is a failure. 
@@ -120,7 +120,7 @@ namespace tiny {
                 throw TypeError(STR("Type " << *t << " is not fully defined yet"), ast->location());
             if (ast->value != nullptr) {
                 Type * valueType = typecheck(ast->value);
-                if (valueType != t)
+                if (valueType != t && valueType->isConvertibleTo(t)
                     throw TypeError{STR("Value of type " << *valueType << " cannot be assigned to variable of type " << *t), ast->location()};
             }
             addVariable(ast->name->name, t, ast);
@@ -224,26 +224,34 @@ namespace tiny {
         }
 
         void visit(ASTWhile * ast) override { 
+            bool old = returned_;
             if(!typecheck(ast->cond)->convertsToBool())
                 throw TypeError{STR("Condition must convert to bool, but " << *ast->cond->type() << " found"), ast->cond->location()};
             typecheck(ast->body);
             ast->setType(Type::getVoid());
-            
+            //TODO (applies also to other conds)
+            //what if the cond is always true and the body contains a return?
+            //then the while loop is guaranteed to return
+            //we assume that the cond might sometimes be false and thus the while loop might not return
+            returned_ = old;
         }
 
-        void visit(ASTDoWhile * ast) override { 
+        void visit(ASTDoWhile * ast) override {
             if(!typecheck(ast->cond)->convertsToBool())
                 throw TypeError{STR("Condition must convert to bool, but " << *ast->cond->type() << " found"), ast->cond->location()};
             typecheck(ast->body);
             ast->setType(Type::getVoid());
         }
 
-        void visit(ASTFor * ast) override { 
+        void visit(ASTFor * ast) override {
+            bool old = returned_;
             typecheck(ast->init);
             if(!typecheck(ast->cond)->convertsToBool())
                 throw TypeError{STR("Condition must convert to bool, but " << *ast->cond->type() << " found"), ast->cond->location()};
             typecheck(ast->increment);
             typecheck(ast->body);
+            ast->setType(Type::getVoid());
+            returned_ = old;
         }
 
         /** No typechecking here */
@@ -353,9 +361,9 @@ namespace tiny {
             Type *lhs = typecheck(ast->lvalue);
             Type *rhs = typecheck(ast->value);
             if (!ast->lvalue->hasAddress())
-                throw TypeError{"Left hand side of assignment must have an address", ast->location()};
+                throw TypeError{STR("Left hand side (" << *lhs << ") of assignment must have an address"), ast->location()};
             if (!rhs->convertsImplicitlyTo(lhs))
-                throw TypeError{"Left hand side of assignment must have the same type as the right hand side", ast->location()};
+                throw TypeError{STR("Left hand side of assignment " << *lhs << " must have the same type as the right hand side " <<  *rhs), ast->location()};
             ast->setType(rhs);
         }
 
@@ -412,7 +420,7 @@ namespace tiny {
             Type *t = typecheck(ast->target);
             if (!t->isPointer())
                 throw TypeError{"Cannot dereference a non-pointer type", ast->location()};
-            PointerType *ptr = static_cast<PointerType*>(t);
+            auto *ptr = static_cast<PointerType*>(t);
             ast->setType(ptr->base());
         }
 
@@ -472,7 +480,8 @@ namespace tiny {
             ast->setType(ft->returnType());
         }
 
-        /** In C-like languages, from typechecking perspective, casting is really trivial. Anything can typecheck to anything, as long as (a) the value typechecks and (b) the target type is fully defined.   
+        /** In C-like languages, from typechecking perspective, casting is really trivial. Anything can typecheck to anything, as long as (a) the value typechecks and
+         * (b) the target type is fully defined.   
          */
         void visit(ASTCast * ast) override { 
             typecheck(ast->value);
