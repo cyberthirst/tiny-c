@@ -114,18 +114,18 @@ namespace tiny {
          *  corresponds to the variable type and then adds the variable to local context. If the variable already
          *  exists in current context (we allow shadowing), an error is raised. 
          */
-        void visit(ASTVarDecl * ast) override { 
+        void visit(ASTVarDecl * ast) override {
             Type * t = typecheck(ast->varType);
             if (!t->isFullyDefined())
                 throw TypeError(STR("Type " << *t << " is not fully defined yet"), ast->location());
             if (ast->value != nullptr) {
                 Type * valueType = typecheck(ast->value);
-                if (valueType != t && valueType->isConvertibleTo(t)
+                if (valueType != t)
                     throw TypeError{STR("Value of type " << *valueType << " cannot be assigned to variable of type " << *t), ast->location()};
             }
             addVariable(ast->name->name, t, ast);
             ast->setType(t);
-        }        
+        }
 
         /** Typechecking a function simply checks that the body typechecks well.
          */
