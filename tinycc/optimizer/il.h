@@ -480,10 +480,114 @@ namespace tiny {
 
 
 
-#define INS(NAME, ENCODING) \
+/*#define INS(NAME, ENCODING) \
     template<typename... Args> \
     Instruction::ENCODING * NAME(Args... args) { return new Instruction::ENCODING{Opcode::NAME, args...}; }
-#include "insns.h"
+#include "insns.h"*/
+
+/* this ^ weirdness gets expanded to things like:
+ * template<typename... Args>
+   Instruction::ImmI * LDI(Args... args) { return new Instruction::ImmI{Opcode::LDI, args...}; }
+
+ * template<typename... Args>
+   Instruction::ImmF * LDF(Args... args) { return new Instruction::ImmF{Opcode::LDF, args...}; }
+    ...
+ */
+
+    //didn't find the macro ^ very readble, so I rather use it in this form (chatgpt ftw):
+    template<typename... Args>
+    Instruction::ImmI * LDI(Args... args) { return new Instruction::ImmI{Opcode::LDI, args...}; }
+
+    template<typename... Args>
+    Instruction::ImmF * LDF(Args... args) { return new Instruction::ImmF{Opcode::LDF, args...}; }
+
+    template<typename... Args>
+    Instruction::Reg * LD(Args... args) { return new Instruction::Reg{Opcode::LD, args...}; }
+
+    template<typename... Args>
+    Instruction::RegReg * ST(Args... args) { return new Instruction::RegReg{Opcode::ST, args...}; }
+
+    template<typename... Args>
+    Instruction::ImmI * ALLOCA(Args... args) { return new Instruction::ImmI{Opcode::ALLOCA, args...}; }
+
+    template<typename... Args>
+    Instruction::ImmI * ALLOCG(Args... args) { return new Instruction::ImmI{Opcode::ALLOCG, args...}; }
+
+    template<typename... Args>
+    Instruction::RegRegImmI * COPY(Args... args) { return new Instruction::RegRegImmI{Opcode::COPY, args...}; }
+
+    template<typename... Args>
+    Instruction::RegRegImmI * GEP(Args... args) { return new Instruction::RegRegImmI{Opcode::GEP, args...}; }
+
+    template<typename... Args>
+    Instruction::RegReg * ADD(Args... args) { return new Instruction::RegReg{Opcode::ADD, args...}; }
+
+    template<typename... Args>
+    Instruction::RegReg * SUB(Args... args) { return new Instruction::RegReg{Opcode::SUB, args...}; }
+
+    template<typename... Args>
+    Instruction::RegReg * MUL(Args... args) { return new Instruction::RegReg{Opcode::MUL, args...}; }
+
+    template<typename... Args>
+    Instruction::RegReg * DIV(Args... args) { return new Instruction::RegReg{Opcode::DIV, args...}; }
+
+    template<typename... Args>
+    Instruction::RegReg * MOD(Args... args) { return new Instruction::RegReg{Opcode::MOD, args...}; }
+
+    template<typename... Args>
+    Instruction::RegReg * SHR(Args... args) { return new Instruction::RegReg{Opcode::SHR, args...}; }
+
+    template<typename... Args>
+    Instruction::RegReg * SHL(Args... args) { return new Instruction::RegReg{Opcode::SHL, args...}; }
+
+    template<typename... Args>
+    Instruction::RegReg * AND(Args... args) { return new Instruction::RegReg{Opcode::AND, args...}; }
+
+    template<typename... Args>
+    Instruction::RegReg * OR(Args... args) { return new Instruction::RegReg{Opcode::OR, args...}; }
+
+    template<typename... Args>
+    Instruction::RegReg * XOR(Args... args) { return new Instruction::RegReg{Opcode::XOR, args...}; }
+
+    template<typename... Args>
+    Instruction::RegReg * NEG(Args... args) { return new Instruction::RegReg{Opcode::NEG, args...}; }
+
+    template<typename... Args>
+    Instruction::RegReg * LT(Args... args) { return new Instruction::RegReg{Opcode::LT, args...}; }
+
+    template<typename... Args>
+    Instruction::RegReg * LTE(Args... args) { return new Instruction::RegReg{Opcode::LTE, args...}; }
+
+    template<typename... Args>
+    Instruction::RegReg * GT(Args... args) { return new Instruction::RegReg{Opcode::GT, args...}; }
+
+    template<typename... Args>
+    Instruction::RegReg * GTE(Args... args) { return new Instruction::RegReg{Opcode::GTE, args...}; }
+
+    template<typename... Args>
+    Instruction::RegReg * EQ(Args... args) { return new Instruction::RegReg{Opcode::EQ, args...}; }
+
+    template<typename... Args>
+    Instruction::ImmS * FUN(Args... args) { return new Instruction::ImmS{Opcode::FUN, args...}; }
+
+    template<typename... Args>
+    Instruction::RegRegs * CALL(Args... args) { return new Instruction::RegRegs{Opcode::CALL, args...}; }
+
+    template<typename... Args>
+    Instruction::ImmI * ARG(Args... args) { return new Instruction::ImmI{Opcode::ARG, args...}; }
+
+    template<typename... Args>
+    Instruction::Terminator * RET(Args... args) { return new Instruction::Terminator{Opcode::RET, args...}; }
+
+    template<typename... Args>
+    Instruction::TerminatorReg * RETR(Args... args) { return new Instruction::TerminatorReg{Opcode::RETR, args...}; }
+
+    template<typename... Args>
+    Instruction::TerminatorB * JMP(Args... args) { return new Instruction::TerminatorB{Opcode::JMP, args...}; }
+
+    template<typename... Args>
+    Instruction::TerminatorRegBB * BR(Args... args) { return new Instruction::TerminatorRegBB{Opcode::BR, args...}; }
+
 
     /** Basic block. 
      */
@@ -496,10 +600,10 @@ namespace tiny {
             name{makeUniqueName()} {
         }
 
-        BasicBlock(std::string const & name): 
+        BasicBlock(std::string const & name):
             name{makeUniqueName(name)} {
         }
-        
+
         bool terminated() const {
             if (insns_.empty())
                 return false;
@@ -519,10 +623,10 @@ namespace tiny {
 
 
 
-    
+
     private:
 
-        friend class Function; 
+        friend class Function;
         friend class Program;
 
         void print(colors::ColorPrinter & p) const {
@@ -551,7 +655,7 @@ namespace tiny {
 
         std::vector<std::unique_ptr<Instruction>> insns_;
 
-    }; 
+    };
 
     inline colors::ColorPrinter & operator << (colors::ColorPrinter & p, BasicBlock const & b) {
         using namespace colors;
