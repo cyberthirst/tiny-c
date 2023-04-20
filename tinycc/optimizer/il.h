@@ -606,9 +606,27 @@ namespace tiny {
     private:
         std::vector<std::unique_ptr<Instruction>> args_;
         std::vector<std::unique_ptr<BasicBlock>> bbs_;
-    }; 
+    };
 
-    /** Program 
+    void Instruction::TerminatorRegBB::print(colors::ColorPrinter & p) const {
+        // Call the base class print function
+        Terminator::print(p);
+
+        // Add specific information for TerminatorRegBB
+        using namespace colors;
+        p << SYMBOL(" ") << IDENT(reg->name) << SYMBOL(" ? ") << IDENT(target1->name) << SYMBOL(" : ") << IDENT(target2->name);
+    }
+
+
+    void Instruction::TerminatorB::print(colors::ColorPrinter & p) const {
+        // Call the base class print function
+        Terminator::print(p);
+
+        using namespace colors;
+        p << SYMBOL(" ") << IDENT(target->name);
+    }
+
+    /** Program
      */
     class Program {
     public:
