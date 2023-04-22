@@ -679,6 +679,7 @@ namespace tiny {
             return bbs_.back().get();
         }
 
+
         Instruction * addArg(Instruction * arg) {
             std::unique_ptr<Instruction> a{arg};
             args_.push_back(std::move(a));

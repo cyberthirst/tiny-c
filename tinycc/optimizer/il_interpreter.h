@@ -6,8 +6,8 @@
 namespace tiny {
 
     /** A very simple interpreter of our intermediate language. 
-
-        Such code is of course not part of a real compiler, but it's quite helpful for us to validate the translated IL and any transformations on it by running it and comparing to the result of the program. 
+        Such code is of course not part of a real compiler, but it's quite helpful for us to validate the translated
+        IL and any transformations on it by running it and comparing to the result of the program.
      */
     class ILInterpreter {
     public:
@@ -191,6 +191,27 @@ namespace tiny {
                     case Opcode::DIV: {
                         NOT_IMPLEMENTED;
                     }
+                    case Opcode::EQ: {
+                        auto eq = REG_REG(ins);
+                        Reg lhs = get(eq->reg1);
+                        Reg rhs = get(eq->reg2);
+
+                        int64_t result;
+                        if (lhs.ins->type == RegType::Int && rhs.ins->type == RegType::Float) {
+                            result = (static_cast<double>(lhs.iVal) == rhs.fVal) ? 1 : 0;
+                        } else if (lhs.ins->type == RegType::Float && rhs.ins->type == RegType::Int) {
+                            result = (lhs.fVal == static_cast<double>(rhs.iVal)) ? 1 : 0;
+                        } else if (lhs.ins->type == RegType::Int && rhs.ins->type == RegType::Int) {
+                            result = (lhs.iVal == rhs.iVal) ? 1 : 0;
+                        } else if (lhs.ins->type == RegType::Float && rhs.ins->type == RegType::Float) {
+                            result = (lhs.fVal == rhs.fVal) ? 1 : 0;
+                        } else {
+                            ASSERT(false && "EQ instruction must have either Int or Float type for operands");
+                        }
+
+                        set(ins, result);
+                        break;
+                    };
                     /** The FUN instruction is just a placeholder for function declaration. No need to do anything when interpreting it as all functions are available in the symbols list.
                      */
                     case Opcode::FUN: {

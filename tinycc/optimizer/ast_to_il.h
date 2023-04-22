@@ -27,7 +27,8 @@ namespace tiny {
                 translate(s);
         }
         
-        /** Translating the literals is trivial. Since for simplicity reasons we do not allow literals to appear as arguments of operator instructions, each literal has to be first loaded as an immediate value to a new register. 
+        /** Translating the literals is trivial. Since for simplicity reasons we do not allow literals to appear as
+         *  arguments of operator instructions, each literal has to be first loaded as an immediate value to a new register.
          */
         void visit(ASTInteger * ast) override { 
             (*this) += LDI(RegType::Int, ast->value, ast);
@@ -41,7 +42,8 @@ namespace tiny {
             (*this) += LDI(RegType::Int, ast->value, ast);
         }
 
-        /** Translating string literals is a bit harder - each string literal is deduplicated and stored as a new global variable that is also initialized with the contents of the literal. 
+        /** Translating string literals is a bit harder - each string literal is deduplicated and stored as a new
+         *  global variable that is also initialized with the contents of the literal.
          */
         void visit(ASTString* ast) override { 
             MARK_AS_UNUSED(ast);
@@ -60,14 +62,15 @@ namespace tiny {
             ASSERT(lastResult_ != nullptr);
         }
 
-        /** We do not have to worry about types at this point. They have already been analyzed by the typechecker so this code is unreachable. 
+        /** We do not have to worry about types at this point. They have already been analyzed by the typechecker
+         *  so this code is unreachable.
          */
         void visit(ASTType* ast) override { MARK_AS_UNUSED(ast); UNREACHABLE; }
         void visit(ASTPointerType* ast) override { MARK_AS_UNUSED(ast); UNREACHABLE; } 
         void visit(ASTArrayType* ast) override { MARK_AS_UNUSED(ast); UNREACHABLE; } 
         void visit(ASTNamedType* ast) override { MARK_AS_UNUSED(ast); UNREACHABLE; }
 
-        /** Seuquence simply translates its elements. 
+        /** Sequence simply translates its elements.
          */
         void visit(ASTSequence* ast) override { 
             for (auto & i : ast->body) 
@@ -84,9 +87,16 @@ namespace tiny {
         }
 
 
-        void visit(ASTVarDecl* ast) override { 
-            MARK_AS_UNUSED(ast);
-            UNREACHABLE;
+        void visit(ASTVarDecl* ast) override {
+            Instruction *lvalue = addVariable(ast->name->name, static_cast<int64_t>(ast->type()->size()));
+            if (ast->value) {
+                translate(ast->value);
+                (*this) += ST(lvalue, lastResult_, ast);
+            }
+            else {
+                //TODO initialize to default value based on the type?
+            }
+
         }
         
         /** Enter a new function.
@@ -95,7 +105,9 @@ namespace tiny {
             Function * f = enterFunction(ast->name);
             for (size_t i = 0, e = ast->args.size(); i != e; ++i) {
                 Symbol name = ast->args[i].second->name;
-                Instruction *arg = ARG(registerTypeFor(ast->args[i].first->type()), static_cast<int64_t>(i), ast->args[i].first.get(), name.name());
+                Instruction *arg = ARG(registerTypeFor(ast->args[i].first->type()),
+                                       static_cast<int64_t>(i), ast->args[i].first.get(),
+                                       name.name());
                 f->addArg(arg);
                 // now we need to create a local copy of the value so that it acts as a variable
                 Type * t = ast->args[i].first->type();
@@ -120,9 +132,36 @@ namespace tiny {
          */
         void visit(ASTFunPtrDecl* ast) override {MARK_AS_UNUSED(ast); lastResult_ = nullptr; }
 
-        void visit(ASTIf* ast) override { 
-            MARK_AS_UNUSED(ast);
-            UNREACHABLE;
+        void visit(ASTIf* ast) override {
+            translate(ast->cond);
+
+            Instruction *cond = lastResult_;
+            BasicBlock *originalBB = bb_;
+            BasicBlock *thenBB = f_->addBasicBlock(STR("then"));
+            BasicBlock *elseBB = f_->addBasicBlock(STR("else"));
+            BasicBlock *mergeBB = f_->addBasicBlock(STR("if-else-merge"));
+
+            //TODO maybe add something like TEST? or something similar like icmp in LLVM?
+            Instruction *isZero = lastResult_;
+            (*this) += BR(isZero, thenBB, elseBB, ast);
+
+            // Process 'then' block
+            //(*this) += JMP(thenBB, ast);
+            enterBasicBlock(thenBB);
+            translate(ast->trueCase);
+
+            //TODO we enter the basic block here, but if the if-else contain blocks themself
+            // then we jump to this BB and inside the block we just enter a new BB
+            // will probably be easy to optimize away later
+            // Process 'else' block
+            if (ast->falseCase) {
+                enterBasicBlock(elseBB);
+                translate(ast->falseCase);
+            }
+
+            // Control flow merges here
+            (*this) += JMP(mergeBB, ast);
+            enterBasicBlock(mergeBB);
         }
 
         void visit(ASTSwitch* ast) override { 
@@ -156,9 +195,9 @@ namespace tiny {
             NOT_IMPLEMENTED;
         }
 
-        void visit(ASTReturn* ast) override { 
-            MARK_AS_UNUSED(ast);
-            NOT_IMPLEMENTED;
+        void visit(ASTReturn* ast) override {
+            translate(ast->value);
+            (*this) += RETR(lastResult_, ast);
         }
         
         void visit(ASTBinaryOp* ast) override { 
@@ -300,8 +339,8 @@ namespace tiny {
 
 
          */
-        void enterBlock() {
-            BasicBlock * bb = f_->addBasicBlock();
+        void enterBlock(std::string const & name = "") {
+            BasicBlock * bb = f_->addBasicBlock(name);
             if (! bb_->terminated())
                 bb_->append(JMP(bb));
             bb_ = bb;
@@ -312,15 +351,25 @@ namespace tiny {
             contexts_.pop_back();
         }
 
-        /** Creates new local variable with given name and size. The variable's ALLOCA instruction is appended to the current block's local definitions basic block and the register containing the address is returned. 
+        BasicBlock *enterBasicBlock(BasicBlock * bb) {
+            assert(bb && "null basic block");
+            assert(!bb->terminated() && "basic block already terminated");
+            bb_ = bb;
+            return bb_;
+        }
+
+        /** Creates new local variable with given name and size. The variable's ALLOCA instruction is appended to the
+         *  current block's local definitions basic block and the register containing the address is returned.
          */
         Instruction * addVariable(Symbol name, size_t size) {
-            Instruction * res = contexts_.back().localsBlock->append(ALLOCA(RegType::Int, static_cast<int64_t>(size), name.name()));
+            Instruction * res = contexts_.back().localsBlock->append( ALLOCA( RegType::Int,
+                                                                              static_cast<int64_t>(size), name.name()));
             contexts_.back().locals.insert(std::make_pair(name, res));
             return res;
         }
 
-        /** Returns the register that holds the address of variable with given name. The address can then be used to load/store its contents. 
+        /** Returns the register that holds the address of variable with given name. The address can then be used to
+         *  load/store its contents.
          */
         Instruction * getVariable(Symbol name) {
             for (size_t i = contexts_.size() - 1, e = contexts_.size(); i < e; --i) {
@@ -329,7 +378,7 @@ namespace tiny {
                     return it->second;
             }
             return nullptr;
-        }
+        ;}
 
         Program p_;
         std::vector<Context> contexts_;
