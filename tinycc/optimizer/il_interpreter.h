@@ -1,6 +1,7 @@
 
 #pragma once
 
+#include <functional>
 #include "il.h"
 
 namespace tiny {
@@ -129,6 +130,7 @@ namespace tiny {
             BasicBlock const * bb = f->start();
             while (bb != nullptr) {
                 ASSERT(bb->terminated());
+                std::cout << "running bb " << bb->name << std::endl;
                 bb = runBasicBlock(bb);
             }
             locals_ = oldLocals;
@@ -180,16 +182,41 @@ namespace tiny {
                         break;
                     }
                     case Opcode::ADD: {
-                        NOT_IMPLEMENTED;
+                        auto add = REG_REG(ins);
+                        Reg lhs = get(add->reg1);
+                        Reg rhs = get(add->reg2);
+                        executeBinaryOperation(ins, std::plus{}, lhs, rhs);
+                        break;
                     }
                     case Opcode::SUB: {
-                        NOT_IMPLEMENTED;
+                        auto add = REG_REG(ins);
+                        Reg lhs = get(add->reg1);
+                        Reg rhs = get(add->reg2);
+                        executeBinaryOperation(ins, std::minus{}, lhs, rhs);
+                        break;
                     }
                     case Opcode::MUL: {
-                        NOT_IMPLEMENTED;
+                        auto mul = REG_REG(ins);
+                        Reg lhs = get(mul->reg1);
+                        Reg rhs = get(mul->reg2);
+                        executeBinaryOperation(ins, std::multiplies{}, lhs, rhs);
+                        break;
                     }
                     case Opcode::DIV: {
-                        NOT_IMPLEMENTED;
+                        auto div = REG_REG(ins);
+                        Reg lhs = get(div->reg1);
+                        Reg rhs = get(div->reg2);
+                        executeBinaryOperation(ins, std::divides{}, lhs, rhs);
+                        break;
+                    }
+                    case Opcode::LT: {
+                        auto lt = REG_REG(ins);
+                        Reg lhs = get(lt->reg1);
+                        Reg rhs = get(lt->reg2);
+                        //std::less returns bool so the compiler complains that the call to set in executeBinaryOp
+                        //is ambiguous (set accepts int and double), so we use a custom lambda
+                        executeBinaryOperation(ins, [](auto lhs, auto rhs) { return static_cast<int64_t>(lhs < rhs ? 1 : 0); }, lhs, rhs);
+                        break;
                     }
                     case Opcode::EQ: {
                         auto eq = REG_REG(ins);
@@ -267,8 +294,6 @@ namespace tiny {
                 }
             }
 
-
-
             return next;
         }
 
@@ -308,6 +333,11 @@ namespace tiny {
 
         void set(Instruction const * ins, int64_t value) {
             ASSERT(ins->type == RegType::Int);
+            /*The issue is likely due to using insert instead of operator[] when trying to update the value associated
+             * with a key in the unordered map. The insert method will only insert a new element if the key is not
+             * already in the map. If the key is already present, the method does nothing.
+             * --> this code probably assume that SSA is used
+             */
             locals_->insert(std::make_pair(ins, Reg{value, ins}));
         }
 
@@ -338,6 +368,22 @@ namespace tiny {
                 ASSERT(i != globals_.end());
             }
             return i->second;
+        }
+
+
+        template<typename Op>
+        void executeBinaryOperation(Instruction const* ins, Op op, Reg lhs, Reg rhs) {
+            switch (ins->type) {
+                case RegType::Int:
+                    set(ins, op(lhs.iVal, rhs.iVal));
+                    break;
+                case RegType::Float:
+                    set(ins, op(lhs.fVal, rhs.fVal));
+                    break;
+                case RegType::Void:
+                    ASSERT(false && "cannot load to void register");
+                    break;
+            }
         }
 
         Program const & p_;

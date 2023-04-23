@@ -621,9 +621,6 @@ namespace tiny {
 
         Instruction const * operator[](size_t i) const { return insns_[i].get(); }
 
-
-
-
     private:
 
         friend class Function;

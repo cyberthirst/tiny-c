@@ -55,8 +55,11 @@ namespace tiny {
         void visit(ASTIdentifier* ast) override { 
             // TODO How to deal with structures? 
             lastResult_ = getVariable(ast->name);
+            //if lValue_ that the identifier will be written into (and thus we don't need to generate any instructions
+            //as this will be handled later in assignment which will generate store)
             if (lValue_) 
                 lValue_ = false;
+            //identifier is used as rValue, thus we need to load it
             else
                 (*this) += LD(registerTypeFor(ast->type()), lastResult_, ast);
             ASSERT(lastResult_ != nullptr);
@@ -135,8 +138,6 @@ namespace tiny {
         void visit(ASTIf* ast) override {
             translate(ast->cond);
 
-            Instruction *cond = lastResult_;
-            BasicBlock *originalBB = bb_;
             BasicBlock *thenBB = f_->addBasicBlock(STR("then"));
             BasicBlock *elseBB = f_->addBasicBlock(STR("else"));
             BasicBlock *mergeBB = f_->addBasicBlock(STR("if-else-merge"));
@@ -180,9 +181,30 @@ namespace tiny {
 
         }
 
-        void visit(ASTFor* ast) override { 
-            MARK_AS_UNUSED(ast);
-            NOT_IMPLEMENTED;
+        void visit(ASTFor* ast) override {
+            //init the loop variables in the current bb
+            translate(ast->init);
+
+            //create the loop bbs
+            BasicBlock *condBB = f_->addBasicBlock(STR("for-cond"));
+            BasicBlock *incBB = f_->addBasicBlock(STR("for-inc"));
+            BasicBlock *bodyBB = f_->addBasicBlock(STR("for-body"));
+            BasicBlock *mergeBB = f_->addBasicBlock(STR("for-merge"));
+
+            (*this) += JMP(condBB, ast);
+            enterBasicBlock(condBB);
+            translate(ast->cond);
+            (*this) += BR(lastResult_, bodyBB, mergeBB, ast);
+
+            enterBasicBlock(bodyBB);
+            translate(ast->body);
+            (*this) += JMP(incBB, ast);
+
+            enterBasicBlock(incBB);
+            translate(ast->increment);
+            (*this) += JMP(condBB, ast);
+
+            enterBasicBlock(mergeBB);
         }
 
         void visit(ASTBreak* ast) override { 
@@ -198,17 +220,38 @@ namespace tiny {
         void visit(ASTReturn* ast) override {
             translate(ast->value);
             (*this) += RETR(lastResult_, ast);
+            enterBasicBlock(f_->addBasicBlock());
         }
         
         void visit(ASTBinaryOp* ast) override { 
             Instruction * lhs = translate(ast->left);
             Instruction * rhs = translate(ast->right);
-            // TODO TODO 
             if (ast->op == Symbol::Mul) {
                 (*this) += MUL(binaryResult(lhs, rhs), lhs, rhs, ast);
+            } else if (ast->op == Symbol::Div){
+                (*this) += DIV(binaryResult(lhs, rhs), lhs, rhs, ast);
+            } else if (ast->op == Symbol::Add) {
+                (*this) += ADD(binaryResult(lhs, rhs), lhs, rhs, ast);
+            } else if (ast->op == Symbol::Sub) {
+                (*this) += SUB(binaryResult(lhs, rhs), lhs, rhs, ast);
+            } else if (ast->op == Symbol::Lt){
+                (*this) += LT(binaryResult(lhs, rhs), lhs, rhs, ast);
+            } else if (ast->op == Symbol::Lte){
+                (*this) += LTE(binaryResult(lhs, rhs), lhs, rhs, ast);
+            } else if (ast->op == Symbol::Gt){
+                (*this) += GT(binaryResult(lhs, rhs), lhs, rhs, ast);
+            } else if (ast->op == Symbol::Gte){
+                (*this) += GTE(binaryResult(lhs, rhs), lhs, rhs, ast);
+            } else if (ast->op == Symbol::Eq){
+                (*this) += EQ(binaryResult(lhs, rhs), lhs, rhs, ast);
+            } else if (ast->op == Symbol::And){
+                (*this) += AND(binaryResult(lhs, rhs), lhs, rhs, ast);
+            } else if (ast->op == Symbol::Or){
+                (*this) += OR(binaryResult(lhs, rhs), lhs, rhs, ast);
             } else {
                 NOT_IMPLEMENTED;
             }
+
         }
 
         void visit(ASTAssignment* ast) override { 
@@ -287,9 +330,9 @@ namespace tiny {
             bool old = lValue_;
             lValue_ = true;
             visitChild(child.get());
-            return lastResult_;
             lValue_ = old;
-        }   
+            return lastResult_;
+        }
 
         /** Adds the given instruction to the program, adding it to the current basic block, which should not be terminated. 
          */
@@ -323,7 +366,7 @@ namespace tiny {
         Function * enterFunction(Symbol name) {
             ASSERT(f_ == nullptr);
             f_ = p_.addFunction(name);
-            Instruction * fReg = FUN(name, name.name());
+            Instruction * fReg = FUN(name,name.name());
             p_.globals()->append(fReg);
             bb_ = f_->addBasicBlock("prolog");
             contexts_.push_back(Context{bb_});
@@ -335,10 +378,7 @@ namespace tiny {
             f_ = nullptr;
         }
 
-        /** Enters new block. 
-
-
-         */
+        // Enters new block.
         void enterBlock(std::string const & name = "") {
             BasicBlock * bb = f_->addBasicBlock(name);
             if (! bb_->terminated())
