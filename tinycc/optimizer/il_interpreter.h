@@ -287,12 +287,12 @@ namespace tiny {
 
         void set(Instruction const * ins, int64_t value) {
             ASSERT(ins->type == RegType::Int);
-            locals_->insert(std::make_pair(ins, Reg{value, ins}));
+            (*locals_)[ins] = Reg{value, ins};
         }
 
         void set(Instruction const * ins, double value) {
-            ASSERT(ins->type == RegType::Int);
-            locals_->insert(std::make_pair(ins, Reg{value, ins}));
+            ASSERT(ins->type == RegType::Float);
+            (*locals_)[ins] = Reg{value, ins};
         }
 
         void set(Instruction const * ins, Reg value) {
