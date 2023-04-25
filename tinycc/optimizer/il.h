@@ -651,7 +651,6 @@ namespace tiny {
         }
 
         std::vector<std::unique_ptr<Instruction>> insns_;
-
     };
 
     inline colors::ColorPrinter & operator << (colors::ColorPrinter & p, BasicBlock const & b) {

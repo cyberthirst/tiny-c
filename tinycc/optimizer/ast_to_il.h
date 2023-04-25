@@ -150,18 +150,17 @@ namespace tiny {
             //(*this) += JMP(thenBB, ast);
             enterBasicBlock(thenBB);
             translate(ast->trueCase);
+            (*this) += JMP(mergeBB, ast);
 
             //TODO we enter the basic block here, but if the if-else contain blocks themself
             // then we jump to this BB and inside the block we just enter a new BB
             // will probably be easy to optimize away later
             // Process 'else' block
-            if (ast->falseCase) {
-                enterBasicBlock(elseBB);
+            enterBasicBlock(elseBB);
+            if (ast->falseCase)
                 translate(ast->falseCase);
-            }
-
-            // Control flow merges here
             (*this) += JMP(mergeBB, ast);
+
             enterBasicBlock(mergeBB);
         }
 
@@ -192,7 +191,7 @@ namespace tiny {
             BasicBlock *mergeBB = f_->addBasicBlock(STR("for-merge"));
 
             (*this) += JMP(condBB, ast);
-            enterBasicBlock(condBB);
+            enterLoopBasicBlock(condBB, incBB, mergeBB);
             translate(ast->cond);
             (*this) += BR(lastResult_, bodyBB, mergeBB, ast);
 
@@ -207,14 +206,22 @@ namespace tiny {
             enterBasicBlock(mergeBB);
         }
 
-        void visit(ASTBreak* ast) override { 
-            MARK_AS_UNUSED(ast);
-            NOT_IMPLEMENTED;
+        void visit(ASTBreak* ast) override {
+            assert(contexts_.back().breakBlock && "Lacking break block");
+            (*this) += JMP(contexts_.back().breakBlock, ast);
+            //TODO kinda wierd, interpreter didn't work without it
+            //we end the basic block here, but the rest still needs to get compiled
+            //thus we create a new basic block (but it will be unreachable)
+            enterBasicBlock(f_->addBasicBlock("wtf"));
         }
 
-        void visit(ASTContinue* ast) override { 
-            MARK_AS_UNUSED(ast);
-            NOT_IMPLEMENTED;
+        void visit(ASTContinue* ast) override {
+            assert(contexts_.back().continueBlock && "Lacking continue block");
+            (*this) += JMP(contexts_.back().continueBlock, ast);
+            //TODO kinda wierd, interpreter didn't work without it
+            //we end the basic block here, but the rest still needs to get compiled
+            //thus we create a new basic block (but it will be unreachable)
+            enterBasicBlock(f_->addBasicBlock("wtf"));
         }
 
         void visit(ASTReturn* ast) override {
@@ -346,9 +353,18 @@ namespace tiny {
         struct Context {
             std::unordered_map<Symbol, Instruction *> locals;
             BasicBlock * localsBlock = nullptr;
+            //following bbs have to be part of the contexts because eg we can enter a for loop in a for loop
+            //thus if those structures would be context insensitive, we would lose the information about the outer loop
+            //used to easily implement break
+            BasicBlock * breakBlock = nullptr;
+            //used to easily implement continue
+            BasicBlock * continueBlock = nullptr;
 
             Context(BasicBlock * locals):
                 localsBlock{locals} {
+            }
+            Context(BasicBlock * locals, BasicBlock * mergeBB, BasicBlock * continueBB):
+                    localsBlock{locals}, breakBlock{mergeBB}, continueBlock{continueBB} {
             }
 
         }; // ASTToILTranslator::Context
@@ -384,7 +400,7 @@ namespace tiny {
             if (! bb_->terminated())
                 bb_->append(JMP(bb));
             bb_ = bb;
-            contexts_.push_back(Context{bb_});
+            contexts_.push_back(Context{bb_, contexts_.back().breakBlock, contexts_.back().continueBlock});
         }
 
         void leaveBlock() {
@@ -395,6 +411,15 @@ namespace tiny {
             assert(bb && "null basic block");
             assert(!bb->terminated() && "basic block already terminated");
             bb_ = bb;
+            return bb_;
+        }
+
+        BasicBlock *enterLoopBasicBlock(BasicBlock * bb, BasicBlock * continueBB=nullptr, BasicBlock * breakBB= nullptr) {
+            assert(bb && "null basic block");
+            assert(!bb->terminated() && "basic block already terminated");
+            bb_ = bb;
+            contexts_.back().continueBlock = continueBB;
+            contexts_.back().breakBlock = breakBB;
             return bb_;
         }
 
@@ -426,8 +451,6 @@ namespace tiny {
         BasicBlock * bb_ = nullptr;
         Function * f_ = nullptr; 
         bool lValue_ = false;
-
-
     }; // tiny::ASTToILTranslator
 
 } // namespace tiny

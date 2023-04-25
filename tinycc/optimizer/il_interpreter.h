@@ -130,7 +130,6 @@ namespace tiny {
             BasicBlock const * bb = f->start();
             while (bb != nullptr) {
                 ASSERT(bb->terminated());
-                std::cout << "running bb " << bb->name << std::endl;
                 bb = runBasicBlock(bb);
             }
             locals_ = oldLocals;
