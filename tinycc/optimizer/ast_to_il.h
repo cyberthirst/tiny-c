@@ -169,15 +169,38 @@ namespace tiny {
             NOT_IMPLEMENTED;
         }
 
-        void visit(ASTWhile* ast) override { 
-            MARK_AS_UNUSED(ast);
-            NOT_IMPLEMENTED;
+        void visit(ASTWhile* ast) override {
+            BasicBlock *condBB = f_->addBasicBlock(STR("while-cond"));
+            BasicBlock *bodyBB = f_->addBasicBlock(STR("while-body"));
+            BasicBlock *mergeBB = f_->addBasicBlock(STR("while-merge"));
+
+            (*this) += JMP(condBB, ast);
+            enterLoopBasicBlock(condBB, bodyBB, mergeBB);
+            translate(ast->cond);
+            (*this) += BR(lastResult_, bodyBB, mergeBB, ast);
+
+            enterBasicBlock(bodyBB);
+            translate(ast->body);
+            (*this) += JMP(condBB, ast);
+
+            enterBasicBlock(mergeBB);
         }
 
         void visit(ASTDoWhile* ast) override { 
-            MARK_AS_UNUSED(ast);
-            NOT_IMPLEMENTED;
+            BasicBlock *bodyBB = f_->addBasicBlock(STR("do-while-body"));
+            BasicBlock *condBB = f_->addBasicBlock(STR("do-while-cond"));
+            BasicBlock *mergeBB = f_->addBasicBlock(STR("do-while-merge"));
 
+            (*this) += JMP(bodyBB, ast);
+            enterLoopBasicBlock(bodyBB, condBB, mergeBB);
+            translate(ast->body);
+            (*this) += JMP(condBB, ast);
+
+            enterBasicBlock(condBB);
+            translate(ast->cond);
+            (*this) += BR(lastResult_, bodyBB, mergeBB, ast);
+
+            enterBasicBlock(mergeBB);
         }
 
         void visit(ASTFor* ast) override {
