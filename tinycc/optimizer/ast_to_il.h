@@ -290,9 +290,12 @@ namespace tiny {
             (*this) += ST(lvalue, value, ast);
         }
 
-        void visit(ASTUnaryOp* ast) override { 
-            MARK_AS_UNUSED(ast);
-            NOT_IMPLEMENTED;
+        void visit(ASTUnaryOp* ast) override {
+            //TODO now we assume that the op is minus
+            auto *zero = LDI(RegType::Int, 0);
+            (*this) +=  zero;
+            translate(ast->arg);
+            (*this) += SUB(binaryResult(zero, lastResult_), zero, lastResult_);
         }
 
         void visit(ASTUnaryPostOp* ast) override { 
@@ -300,14 +303,14 @@ namespace tiny {
             NOT_IMPLEMENTED;
         }
 
-        void visit(ASTAddress* ast) override { 
-            MARK_AS_UNUSED(ast);
-            NOT_IMPLEMENTED;
+        void visit(ASTAddress* ast) override {
+            translateLValue(ast->target);
+            (*this) += LD(RegType::Int, lastResult_, ast);
         }
 
-        void visit(ASTDeref* ast) override { 
-            MARK_AS_UNUSED(ast);
-            NOT_IMPLEMENTED;
+        void visit(ASTDeref* ast) override {
+            translate(ast->target);
+            (*this) += LD(lastResult_->type, lastResult_, ast);
         }
 
         void visit(ASTIndex* ast) override { 
