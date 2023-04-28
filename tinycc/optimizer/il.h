@@ -704,6 +704,7 @@ namespace tiny {
         }
 
         BasicBlock * start() const { return bbs_[0].get(); }
+        RegType retType_;
     private:
         std::vector<std::unique_ptr<Instruction>> args_;
         std::vector<std::unique_ptr<BasicBlock>> bbs_;

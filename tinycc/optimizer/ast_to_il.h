@@ -106,6 +106,7 @@ namespace tiny {
          */
         void visit(ASTFunDecl* ast) override { 
             Function * f = enterFunction(ast->name);
+            f->retType_ = registerTypeFor(ast->type());
             for (size_t i = 0, e = ast->args.size(); i != e; ++i) {
                 Symbol name = ast->args[i].second->name;
                 Instruction *arg = ARG(registerTypeFor(ast->args[i].first->type()),
@@ -328,9 +329,16 @@ namespace tiny {
             NOT_IMPLEMENTED;
         }
 
-        void visit(ASTCall* ast) override { 
-            MARK_AS_UNUSED(ast);
-            NOT_IMPLEMENTED;
+        void visit(ASTCall* ast) override {
+            translateLValue(ast->function);
+            auto f = lastResult_;
+            std::vector<Instruction *> args;
+            for (auto & i : ast->args)
+                args.push_back(translate(i));
+            auto sym = dynamic_cast<Instruction::ImmS const *>(f);
+            assert(sym);
+            auto fun = p_.getFunction(sym->value);
+            (*this) += CALL(fun->retType_, f, args, ast);
         }
 
         void visit(ASTCast* ast) override { 
