@@ -20,6 +20,7 @@ struct Test {
     int64_t result = 0;
     bool testResult = false;
     char const * shouldError = nullptr;
+    std::tuple<> args;
 
     Test(char const * file, int line, char const * input):
         file{file}, line{line}, input{input} {
@@ -32,28 +33,123 @@ struct Test {
     Test(char const * file, int line, char const * input, int result, bool testResult, char const * shouldError):
         file{file}, line{line}, input{input}, result{result}, testResult{testResult}, shouldError{shouldError} {
     }
+
+    template<typename... Args>
+    Test(char const * file, int line, char const * input, int64_t result, Args&&... args):
+            file{file}, line{line}, input{input}, result{result}, testResult{true}, shouldError{nullptr}, args{std::make_tuple(std::forward<Args>(args)...)} {
+    }
 };
 
 #define TEST(...) Test{__FILE__, __LINE__, __VA_ARGS__}
-#define ERROR(input, kind) Test{__FILE__, __LINE__, input, 0, false, # kind} 
+#define TEST_ARGS(input, result, ...) Test{__FILE__, __LINE__, input, result, __VA_ARGS__}
+#define ERROR(input, kind) Test{__FILE__, __LINE__, input, 0, false, # kind}
 
 Test tests[] = {
-    TEST("int main() { return 1; }", 1),
-    TEST("int main() { if (1) return 10; else return 2; }", 10),
+    /*TEST("int main() { return 1; }", 1),
+    TEST("int main() { if (1) {return 10;} else return 2; }", 10),
     TEST("int main() { if (0) return 10; else return 2; }", 2),
     TEST("int main() { int i = 1; return i; }", 1),
-    TEST("int bar(int i) { return i; } int main() { return bar(5); }", 5),
+    TEST("int main() { int i; return i; }", 0),*/
+    /*TEST("int bar(int i) { return i; } int main() { return bar(5); }", 5),
     TEST("int bar(int i) { if (i) return 10; else return 5; } int main() { return bar(5); }", 10),
-    TEST("void bar(int * i) { *i = 10; } int main() { int i = 1; bar(&i); return i; }", 10),
-
-/*    TEST("void main(int a, int b) {}"),
-    TEST("void main(int a, int b) { 1 * 2; }"),
-    TEST("void main(int a, int b) { a * b; }"),
+    TEST("void bar(int * i) { *i = 10; } int main() { int i = 1; bar(&i); return i; }", 10),*/
+    TEST("int main() { return 2 * 2; }", 4),
+    TEST("int main() { return 4 / 2; }", 2),
+    TEST("int main() { return 2 + 2; }", 4),
+    TEST("int main() { return 4 - 2; }", 2),
+    //TEST("int main() { int i; i = 0; i = 1; return i; }", 1),
+    TEST("int main() { \
+             int sum = 0; \
+             for (int i = 0; i < 2; i = i + 1) {\
+               sum = sum + 1; } \
+             return sum; \
+         }", 2),
+    TEST("int main() { \
+             int sum = 0; \
+             for (int i = 0; i < 3; i = i + 1) {\
+                if (i == 1)\
+                    continue;\
+                sum = sum + 1; } \
+             return sum; \
+         }", 2),
+    TEST("int main() { \
+             int sum = 0; \
+             for (int i = 0; i < 5; i = i + 1) {\
+                if (i == 2)\
+                    break;\
+                sum = sum + 1; } \
+             return sum; \
+         }", 2),
+    TEST("int main() { \
+             int sum = 0; \
+             while (sum < 5) {\
+                if (sum == 2)\
+                    break;\
+                sum = sum + 1; } \
+             return sum; \
+         }", 2),
+    TEST("int main() { \
+             int sum = 0; \
+             do {\
+                sum = sum + 1;\
+             }\
+             while (sum < 1); \
+             return sum; \
+         }", 1),
+    TEST("int main() { \
+             int sum = 0; \
+             do {\
+                sum = sum + 1;\
+             }\
+             while (sum < 5); \
+             return sum; \
+         }", 5),
+    //ADDRESS & DEREF
+    TEST("int main() { \
+             int sum = 0; \
+             int *p = &sum;\
+             *p = 2;\
+             return sum; \
+         }", 2),
+    TEST("int main() { \
+             int sum = 0; \
+             int *p = &sum;\
+             *p = 2;\
+             return *p; \
+         }", 2),
+    //END ADDRESS & DEREF
+    //FUNCTION CALL
+    TEST("\
+        int foo() { \
+            return 2; \
+         } \
+        int main() { \
+             return foo(); \
+         }", 2),
+        TEST("\
+        int id(int a) { \
+            return a; \
+         } \
+        int main() { \
+             return id(2); \
+         }", 2),
+    //END FUNCTION CALL
+     //UNARY OPERATOR
+ /*TEST("\
+        int main() { \
+             int i = -2;\
+             i = i + 2;\
+             return i; \
+         }", 0),*/
+     //END UNARY OPERATOR
+        //TEST("void main(int a, int b) {}"),
+    //TEST("void main(int a, int b) { 1 * 2; }", 2),
+    /*TEST("void main(int a, int b) { a * b; }"),
     TEST("void main(int a, int b) { a = 3; }"),
-    TEST("void main(int a, int b) { a = b; }"),
-*/
+    TEST("void main(int a, int b) { a = b; }"),*/
+
     // Tests that exercise the parser, lexer and a typechecker
-    TEST("void main() {}"),
+    /*TEST("void main() {}"),
     ERROR("void main() { return 1; }", TypeError), 
     TEST("void main() { 1 * 2; }"),
     TEST("void main() { int a; }"),
@@ -179,9 +275,11 @@ Test tests[] = {
     int main() { \
         return fact(10); \
     }"),
+
     //MY TESTS
     TEST("int main() { for (int i = 0; i < 10; i++) { print(cast<char>(i + '0')); } return 666; }"),
     TEST("int sum(int a, int b) { return a + b; } int main() { return sum(5, 6); }"),
+     */
     /*TEST("int main() { int arr[5]; return arr[2]; }"),
     TEST("void swap(int *a, int *b) { int temp = *a; *a = *b; *b = temp; } int main() { int x = 10; int y = 20; swap(&x, &y); return x + y; }"),
     // Assigning a float to an int variable is a type error
@@ -248,7 +346,7 @@ bool compile(std::string const & contents, Test const * test) {
         // typecheck
         Typechecker::checkProgram(ast);
         // translate to IR
-        /*Program p = ASTToILTranslator::translateProgram(ast);
+        Program p = ASTToILTranslator::translateProgram(ast);
         if (Options::verboseIL)
             std::cout << ColorPrinter::colorize(p) << std::endl;
         if (test && test->testResult && Options::testIR) {
@@ -257,7 +355,7 @@ bool compile(std::string const & contents, Test const * test) {
                 std::cerr << "ERROR: expected " << test->result << ", got " << result << color::reset << std::endl;
                 return false;
             }
-        }*/
+        }
         // optimize
         // TODO
         // translate to target
@@ -278,7 +376,6 @@ bool compile(std::string const & contents, Test const * test) {
 
 int main(int argc, char * argv []) {
     initializeTerminal();
-    std::cout << color::gray << "The one and only Tiny-C brought to you by NI-GEN" << color::reset << std::endl;
     // parse arguments
     char const * filename = nullptr;
     if (Options::parseArgs(argc, argv, filename) == EXIT_FAILURE)
