@@ -710,7 +710,7 @@ namespace tiny {
         std::vector<std::unique_ptr<BasicBlock>> bbs_;
     };
 
-    void Instruction::TerminatorRegBB::print(colors::ColorPrinter & p) const {
+    /*void Instruction::TerminatorRegBB::print(colors::ColorPrinter & p) const {
         // Call the base class print function
         Terminator::print(p);
 
@@ -726,7 +726,7 @@ namespace tiny {
 
         using namespace colors;
         p << SYMBOL(" ") << IDENT(target->name);
-    }
+    }*/
 
     /** Program
      */

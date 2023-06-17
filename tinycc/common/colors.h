@@ -10,6 +10,8 @@
 #include <iostream>
 #include <functional>
 #include <iomanip>
+#include <sstream>
+
 
 #include "common/symbol.h"
 
