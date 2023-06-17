@@ -8,3 +8,5 @@ std::vector<Test> array_tests = {
     TEST("int main() { int arr[5]; return arr[2]; }"),
     TEST("int main() { int arr[5]; return arr[10]; }"),
 };
+
+DEFINE_TEST_CATEGORY(array_tests)

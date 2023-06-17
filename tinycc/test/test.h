@@ -7,6 +7,9 @@
 #include <cstdlib>
 #include <tuple>
 #include <map>
+#include <string>
+
+#define RUN_ALL 0
 
 struct Test {
     char const * file;

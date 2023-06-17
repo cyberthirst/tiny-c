@@ -24,3 +24,5 @@ std::vector<Test> pointer_tests = {
     TEST("void main(double * a) { *a = 6.0; }"),
     TEST("void main(int * a) { a = 678; }"),
 };
+
+DEFINE_TEST_CATEGORY(pointer_tests)

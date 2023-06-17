@@ -19,3 +19,5 @@ std::vector<Test> cast_tests = {
     TEST("void main(int a) { a = cast<int>(4.0); }"),
     TEST("int* main() { return cast<int*>(0); }"),
 };
+
+DEFINE_TEST_CATEGORY(cast_tests)

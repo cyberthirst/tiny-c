@@ -57,3 +57,5 @@ std::vector<Test> control_flow_tests = {
     TEST("int main() { if (1) {return 10;} else return 2; }", 10),
     TEST("int main() { if (0) return 10; else return 2; }", 2),
 };
+
+DEFINE_TEST_CATEGORY(control_flow_tests)

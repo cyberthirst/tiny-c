@@ -66,3 +66,5 @@ std::vector<Test> operator_tests = {
     TEST("void main(int a, int b) { a = 3; }"),
     TEST("void main(int a, int b) { a = b; }"),
 };
+
+DEFINE_TEST_CATEGORY(operator_tests)

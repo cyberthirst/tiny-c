@@ -36,5 +36,6 @@ std::vector<Test> function_tests = {
     TEST("int main(int x) { return main(x); }"),
     TEST("int bar(int i) { if (i) return 10; else return 5; } int main() { return bar(5); }", 10),
     TEST("void bar(int * i) { *i = 10; } int main() { int i = 1; bar(&i); return i; }", 10),
-
 };
+
+DEFINE_TEST_CATEGORY(function_tests)

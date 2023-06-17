@@ -9,3 +9,5 @@ std::vector<Test> io_tests = {
     TEST("void main() { scan(); }"),
     TEST("void main() { print('a'); }"),
 };
+
+DEFINE_TEST_CATEGORY(io_tests)

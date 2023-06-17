@@ -55,8 +55,8 @@ namespace tiny {
         void visit(ASTIdentifier* ast) override { 
             // TODO How to deal with structures? 
             lastResult_ = getVariable(ast->name);
-            //if lValue_ that the identifier will be written into (and thus we don't need to generate any instructions
-            //as this will be handled later in assignment which will generate store)
+            //if we have lValue_ then the identifier will be written into, and thus we don't need to generate any instructions
+            //as this will be handled later in assignment which will generate the store
             if (lValue_) 
                 lValue_ = false;
             //identifier is used as rValue, thus we need to load it

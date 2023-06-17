@@ -12,3 +12,5 @@ std::vector<Test> struct_tests{
     TEST("struct Foo { }; void main(Foo x) {}"),
     TEST("struct Foo; struct Foo { int i; }; void main(Foo x) {}"),
 };
+
+DEFINE_TEST_CATEGORY(struct_tests)

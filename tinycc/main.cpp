@@ -24,23 +24,7 @@
 using namespace tiny;
 using namespace colors;
 
-std::map<std::string, std::vector<Test>> testCategories = {
-        {"arithmetic", arithmetic_tests},
-        {"flow control", control_flow_tests},
-        {"io", io_tests},
-        {"arrays", array_tests},
-        {"casts", cast_tests},
-        {"pointers", pointer_tests},
-        {"functions", function_tests},
-        {"structs", struct_tests},
-        //...
-};
-
-Test tests[] = {
-
-
-};
-
+std::map<std::string, std::vector<Test>> testCategories;
 
 bool compile(std::string const & contents, Test const * test) {
     try {
@@ -79,35 +63,59 @@ bool compile(std::string const & contents, Test const * test) {
     return false;
 }
 
+void RunSelectedTestSuite(const std::string& suiteName) {
+    auto it = testCategories.find(suiteName);
+    if (it == testCategories.end()) {
+        std::cerr << "Test suite '" << suiteName << "' not found." << std::endl;
+        return;
+    }
+
+    size_t ntests = it->second.size();
+    size_t fails = 0;
+
+    std::cout << "Running " << ntests << " tests in category: " << suiteName << std::endl;
+    for (auto const & t : it->second) {
+        if (! compile(t.input, & t)) {
+            std::cout << color::red << t.file << ":" << t.line << ": Test failed." << color::reset << std::endl;
+            std::cout << "    " << t.input << std::endl;
+            ++fails;
+            if (Options::exitAfterFailure)
+                break;
+        }
+    }
+    std::cout << "Finished running tests in category: " << suiteName << std::endl;
+    if (fails > 0) {
+        std::cout << color::red << "FAIL. Total " << fails << " tests out of " << ntests << " failed." << color::reset << std::endl;
+    } else {
+        std::cout << color::green << "PASS. All " << ntests << " tests passed." << color::reset << std::endl;
+    }
+}
+
+void RunAllTestSuites() {
+    for (const auto& [suiteName, tests] : testCategories) {
+        RunSelectedTestSuite(suiteName);
+    }
+}
+
 int main(int argc, char * argv []) {
     initializeTerminal();
     // parse arguments
     char const * filename = nullptr;
     if (Options::parseArgs(argc, argv, filename) == EXIT_FAILURE)
         return EXIT_FAILURE;
+
     if (filename == nullptr) {
-        size_t ntests = sizeof(tests) / sizeof(Test);
-        size_t fails = 0;
-        std::cout << "Running " << ntests << " tests..." << std::endl;
-        for (auto const & t : tests) {
-            if (! compile(t.input, & t)) {
-                std::cout << color::red << t.file << ":" << t.line << ": Test failed." << color::reset << std::endl;
-                std::cout << "    " << t.input << std::endl;
-                ++fails;
-                if (Options::exitAfterFailure)
-                    break;
-            }
-        }
-        if (fails > 0) {
-            std::cout << color::red << "FAIL. Total " << fails << " tests out of " << ntests << " failed." << color::reset << std::endl;
-            return EXIT_FAILURE;
+        if (RUN_ALL) {
+            RunAllTestSuites();
         } else {
-            std::cout << color::green << "PASS. All " << ntests << " tests passed." << color::reset << std::endl;
+            RunSelectedTestSuite("arithmetic_tests");
+            //RunSelectedTestSuite("control_flow_tests");
+            //RunSelectedTestSuite("function_tests");
         }
     } else {
         std::cout << "Compiling file " << filename << "..." << std::endl;
         if (! compile(filename, /* test */nullptr))
             return EXIT_FAILURE;
     }
-   return EXIT_SUCCESS;
+    return EXIT_SUCCESS;
 }

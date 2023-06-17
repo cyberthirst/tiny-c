@@ -13,3 +13,5 @@ std::vector<Test> typedef_tests = {
     ERROR("typedef int (*func_ptr_t)(int); int foo(int x, int y) { return x + y; } int apply(func_ptr_t f, int x) { return f(x); } int main() { return apply(foo, 5); }",
           TypeError),
 };
+
+DEFINE_TEST_CATEGORY(typedef_tests)

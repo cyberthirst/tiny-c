@@ -9,3 +9,4 @@
 #include "test/test.h"
 
 extern std::vector<Test> typechecker_tests;
+

@@ -61,3 +61,5 @@ std::vector<Test> typechecker_tests = {
     ERROR("struct Foo {}; Foo main(Foo i) { return ++i; }", TypeError),
     ERROR("struct Foo {}; Foo main(Foo i) { return --i; }", TypeError),
 };
+
+DEFINE_TEST_CATEGORY(typechecker_tests)
