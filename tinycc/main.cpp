@@ -65,7 +65,6 @@ bool compile(std::string const & contents, Test const * test, TestResult *result
             return true;
         if (e.kind() == "TypeError")
             ++result->typecheck_fails;
-        std::cout << "kind: " << e.kind() << std::endl;
         std::cerr << color::red << "ERROR: " << color::reset << e << std::endl;
     } catch (std::exception const &e) {
         std::cerr << color::red << "ERROR: " << color::reset << e.what() << std::endl;
@@ -83,11 +82,16 @@ void RunSelectedTestSuite(const std::string& suiteName) {
     }
 
     TestResult *result = new  TestResult();
-    result->total_tests = it->second.size();
+    result->total_tests = 0;
     result->total_fails = 0;
 
-    std::cout << "Running " << result->total_tests << " tests in category: " << color::blue << suiteName << color::reset << std::endl;
+    std::cout << "Running tests in category: " << color::blue << suiteName << color::reset << std::endl;
+
     for (auto const & t : it->second) {
+        if (RUN_MARKED_TESTS_ONLY && !t.marked)
+            continue;
+        else
+            ++result->total_tests;
         if (! compile(t.input, & t, result)) {
             std::cout << color::red << t.file << ":" << t.line << ": Test failed." << color::reset << std::endl;
             std::cout << "    " << t.input << std::endl;
@@ -96,7 +100,6 @@ void RunSelectedTestSuite(const std::string& suiteName) {
                 break;
         }
     }
-    std::cout << "Finished running tests in category: " << suiteName << std::endl;
     if (result->total_fails > 0) {
         std::cout << color::red << "All: " << result->total_fails << "/" << result->total_tests << " failed." << color::reset << std::endl;
         std::cout << color::red << "Typecheck: " << result->typecheck_fails << "/" << result->typechecks << " failed." << color::reset << std::endl;
@@ -119,10 +122,10 @@ int main(int argc, char * argv []) {
         return EXIT_FAILURE;
 
     if (filename == nullptr) {
-        if (RUN_ALL) {
+        if (RUN_ALL_TEST_SUITES) {
             RunAllTestSuites();
         } else {
-            RunSelectedTestSuite("function_tests");
+            RunSelectedTestSuite("operator_tests");
             //RunSelectedTestSuite("function_tests");
         }
     } else {

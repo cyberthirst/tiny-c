@@ -9,7 +9,9 @@
 #include <map>
 #include <string>
 
-#define RUN_ALL 0
+#define RUN_ALL_TEST_SUITES 0
+#define RUN_MARKED_TESTS_ONLY 1
+
 
 struct Test {
     char const * file;
@@ -19,16 +21,25 @@ struct Test {
     bool testResult = false;
     char const * shouldError = nullptr;
     std::tuple<> args;
+    bool marked = false;  // Add this field to your Test struct
 
+    // Constructor for when only the test input is provided
     Test(char const * file, int line, char const * input):
             file{file}, line{line}, input{input} {
     }
 
+    // Constructor for when both the test input and the expected result are provided
     Test(char const * file, int line, char const * input, int64_t result):
             file{file}, line{line}, input{input}, result{result}, testResult{true} {
     }
 
-    Test(char const * file, int line, char const * input, int result, bool testResult, char const * shouldError):
+    // Constructor for when the test input, the expected result, and the `marked` flag are provided
+    Test(char const * file, int line, char const * input, int64_t result, bool marked):
+            file{file}, line{line}, input{input}, result{result}, testResult{true}, marked{marked} {
+    }
+
+    // Additional constructor for ERROR macro
+    Test(char const * file, int line, char const * input, int64_t result, bool testResult, char const * shouldError):
             file{file}, line{line}, input{input}, result{result}, testResult{testResult}, shouldError{shouldError} {
     }
 
@@ -38,9 +49,18 @@ struct Test {
     }
 };
 
-#define TEST(...) Test{__FILE__, __LINE__, __VA_ARGS__}
-#define TEST_ARGS(input, result, ...) Test{__FILE__, __LINE__, input, result, __VA_ARGS__}
+
 #define ERROR(input, kind) Test{__FILE__, __LINE__, input, 0, false, # kind}
+#define TEST_ARGS(input, result, ...) Test{__FILE__, __LINE__, input, result, __VA_ARGS__}
+
+#define GET_MACRO(_1, _2, _3, NAME, ...) NAME
+#define TEST(...) GET_MACRO(__VA_ARGS__, TEST_MARKED, TEST_RESULT, TEST_BASE)(__VA_ARGS__)
+
+#define TEST_BASE(input) Test{__FILE__, __LINE__, input}
+#define TEST_RESULT(input, result) Test{__FILE__, __LINE__, input, result}
+#define TEST_MARKED(input, result, marked) Test{__FILE__, __LINE__, input, result, marked}
+
+
 
 #define DEFINE_TEST_CATEGORY(category_name) \
     extern std::vector<Test> category_name; \
