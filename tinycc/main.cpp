@@ -43,10 +43,9 @@ bool compile(std::string const & contents, Test const * test, TestResult *result
         Typechecker::checkProgram(ast);
         if (test && !test->testResult)
             ++result->typechecks;
+        Program p = ASTToILTranslator::translateProgram(ast);
         if (test && test->testResult && Options::testIR) {
-            // translate to IR
-            Program p = ASTToILTranslator::translateProgram(ast);
-            if (Options::verboseIL)
+            if (test->marked)
                 std::cout << ColorPrinter::colorize(p) << std::endl;
             int64_t result = ILInterpreter::run(p);
             if (result != test->result) {
@@ -125,7 +124,7 @@ int main(int argc, char * argv []) {
         if (RUN_ALL_TEST_SUITES) {
             RunAllTestSuites();
         } else {
-            RunSelectedTestSuite("operator_tests");
+            RunSelectedTestSuite("basic_calculator_tests");
             //RunSelectedTestSuite("function_tests");
         }
     } else {

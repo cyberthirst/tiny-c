@@ -13,6 +13,8 @@ namespace tiny {
     class BasicBlock;
     class Instruction;
 
+    class IRVisitor;
+
     enum class Opcode {
 #define INS(OPCODE, ...) OPCODE,
 #include "insns.h"
@@ -49,6 +51,8 @@ namespace tiny {
         return p;
     }
 
+
+
     /** Basic instruction. 
      */
     class Instruction {
@@ -77,6 +81,7 @@ namespace tiny {
 
         friend class BasicBlock;
         friend class Function;
+        friend class IRVisitor;
 
         Instruction(Opcode opcode, RegType type, AST const * ast, std::string const & name):
             opcode{opcode},
@@ -91,6 +96,8 @@ namespace tiny {
             ast{ast},
             name{makeUniqueName()} {
         }
+
+        virtual void accept(IRVisitor* visitor) = 0;
 
         virtual void print(colors::ColorPrinter & p) const {
             using namespace colors;
@@ -139,7 +146,9 @@ namespace tiny {
             value{value} {
         }
 
+
     protected:
+        void accept(IRVisitor* visitor) override;
 
         void print(colors::ColorPrinter & p) const override {
             using namespace colors;
@@ -169,6 +178,7 @@ namespace tiny {
         }
 
     protected:
+        void accept(IRVisitor* visitor) override;
 
         void print(colors::ColorPrinter & p) const override {
             using namespace colors;
@@ -199,6 +209,7 @@ namespace tiny {
         }
 
     protected:
+        void accept(IRVisitor* visitor) override;
 
         void print(colors::ColorPrinter & p) const override {
             using namespace colors;
@@ -232,6 +243,7 @@ namespace tiny {
         }
 
     protected:
+        void accept(IRVisitor* visitor) override;
 
         void print(colors::ColorPrinter & p) const override {
             using namespace colors;
@@ -278,6 +290,7 @@ namespace tiny {
 
 
     protected:
+        void accept(IRVisitor* visitor) override;
 
         void print(colors::ColorPrinter & p) const override {
             using namespace colors;
@@ -329,6 +342,7 @@ namespace tiny {
 
 
     protected:
+        void accept(IRVisitor* visitor) override;
 
         void print(colors::ColorPrinter & p) const override {
             using namespace colors;
@@ -365,6 +379,7 @@ namespace tiny {
         }
 
     protected:
+        void accept(IRVisitor* visitor) override;
 
         void print(colors::ColorPrinter & p) const override {
             using namespace colors;
@@ -389,6 +404,9 @@ namespace tiny {
         Terminator(Opcode opcode, std::string const & name):
             Instruction{opcode, RegType::Void, nullptr, name} {
         }
+    protected:
+        void accept(IRVisitor* visitor) override;
+
     }; // tiny::il::Instruction::Terminator
 
     class Instruction::TerminatorB : public Instruction::Terminator {
@@ -411,6 +429,7 @@ namespace tiny {
         }
 
     protected:
+        void accept(IRVisitor* visitor) override;
 
         void print(colors::ColorPrinter & p) const override;
 
@@ -436,6 +455,7 @@ namespace tiny {
         }
 
     protected:
+        void accept(IRVisitor* visitor) override;
 
         void print(colors::ColorPrinter & p) const override {
             using namespace colors;
@@ -473,6 +493,7 @@ namespace tiny {
         }
 
     protected:
+        void accept(IRVisitor* visitor) override;
 
         void print(colors::ColorPrinter & p) const override;
 
@@ -710,24 +731,6 @@ namespace tiny {
         std::vector<std::unique_ptr<BasicBlock>> bbs_;
     };
 
-    /*void Instruction::TerminatorRegBB::print(colors::ColorPrinter & p) const {
-        // Call the base class print function
-        Terminator::print(p);
-
-        // Add specific information for TerminatorRegBB
-        using namespace colors;
-        p << SYMBOL(" ") << IDENT(reg->name) << SYMBOL(" ? ") << IDENT(target1->name) << SYMBOL(" : ") << IDENT(target2->name);
-    }
-
-
-    void Instruction::TerminatorB::print(colors::ColorPrinter & p) const {
-        // Call the base class print function
-        Terminator::print(p);
-
-        using namespace colors;
-        p << SYMBOL(" ") << IDENT(target->name);
-    }*/
-
     /** Program
      */
     class Program {
@@ -768,9 +771,36 @@ namespace tiny {
 
         BasicBlock globals_;
         std::unordered_map<Symbol, Function *> functions_;
-    }; 
+    };
 
+    class IRVisitor {
+    public:
+        virtual ~IRVisitor() = default;
 
+        virtual void visit(Instruction::ImmI* instr) { MARK_AS_UNUSED(instr); NOT_IMPLEMENTED; }
+        virtual void visit(Instruction::ImmF* instr) { MARK_AS_UNUSED(instr); NOT_IMPLEMENTED; }
+        virtual void visit(Instruction::ImmS* instr) { MARK_AS_UNUSED(instr); NOT_IMPLEMENTED; }
+        virtual void visit(Instruction::Reg* instr) { MARK_AS_UNUSED(instr); NOT_IMPLEMENTED; }
+        virtual void visit(Instruction::RegReg* instr) { MARK_AS_UNUSED(instr); NOT_IMPLEMENTED; }
+        virtual void visit(Instruction::RegRegImmI* instr) { MARK_AS_UNUSED(instr); NOT_IMPLEMENTED; }
+        virtual void visit(Instruction::RegRegs* instr) { MARK_AS_UNUSED(instr); NOT_IMPLEMENTED; }
+        virtual void visit(Instruction::Terminator* instr) { MARK_AS_UNUSED(instr); NOT_IMPLEMENTED; }
+        virtual void visit(Instruction::TerminatorReg* instr) { MARK_AS_UNUSED(instr); NOT_IMPLEMENTED; }
+        virtual void visit(Instruction::TerminatorB* instr) { MARK_AS_UNUSED(instr); NOT_IMPLEMENTED; }
+        virtual void visit(Instruction::TerminatorRegBB* instr) { MARK_AS_UNUSED(instr); NOT_IMPLEMENTED; }
+    };
+
+    inline void Instruction::ImmI::accept(IRVisitor * v) { v->visit(this); }
+    inline void Instruction::ImmF::accept(IRVisitor * v) { v->visit(this); }
+    inline void Instruction::ImmS::accept(IRVisitor * v) { v->visit(this); }
+    inline void Instruction::Reg::accept(IRVisitor * v) { v->visit(this); }
+    inline void Instruction::RegReg::accept(IRVisitor * v) { v->visit(this); }
+    inline void Instruction::RegRegImmI::accept(IRVisitor * v) { v->visit(this); }
+    inline void Instruction::RegRegs::accept(IRVisitor * v) { v->visit(this); }
+    inline void Instruction::Terminator::accept(IRVisitor * v) { v->visit(this); }
+    inline void Instruction::TerminatorReg::accept(IRVisitor * v) { v->visit(this); }
+    inline void Instruction::TerminatorB::accept(IRVisitor * v) { v->visit(this); }
+    inline void Instruction::TerminatorRegBB::accept(IRVisitor * v) { v->visit(this); }
 
 } // namespace tiny
 
