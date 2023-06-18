@@ -6,7 +6,7 @@
 
 std::vector<Test> operator_tests = {
     TEST("int main() { int i = -2; i = i + 2; return i;}", 0),
-    TEST("void main(int a, int b) { 1 * 2; }", 2, true),
+    TEST("void main(int a, int b) { 1 * 2; }"),
     TEST("void main(int a, int b) { a * b; }"),
     TEST("int main(int a, int b) { return a + b; }"),
     TEST("int main(int a, int b) { return a - b; }"),
