@@ -26,7 +26,14 @@ using namespace colors;
 
 std::map<std::string, std::vector<Test>> testCategories;
 
-bool compile(std::string const & contents, Test const * test) {
+struct TestResult {
+    size_t total_tests = 0;
+    size_t total_fails = 0;
+    size_t typechecks = 0;
+    size_t typecheck_fails = 0;
+};
+
+bool compile(std::string const & contents, Test const * test, TestResult *result) {
     try {
         // parse
         std::unique_ptr<AST> ast = (test == nullptr) ? Parser::parseFile(contents) : Parser::parse(contents);
@@ -34,11 +41,13 @@ bool compile(std::string const & contents, Test const * test) {
             std::cout << ColorPrinter::colorize(*ast) << std::endl;
         // typecheck
         Typechecker::checkProgram(ast);
-        // translate to IR
-        Program p = ASTToILTranslator::translateProgram(ast);
-        if (Options::verboseIL)
-            std::cout << ColorPrinter::colorize(p) << std::endl;
+        if (test && !test->testResult)
+            ++result->typechecks;
         if (test && test->testResult && Options::testIR) {
+            // translate to IR
+            Program p = ASTToILTranslator::translateProgram(ast);
+            if (Options::verboseIL)
+                std::cout << ColorPrinter::colorize(p) << std::endl;
             int64_t result = ILInterpreter::run(p);
             if (result != test->result) {
                 std::cerr << "ERROR: expected " << test->result << ", got " << result << color::reset << std::endl;
@@ -54,6 +63,9 @@ bool compile(std::string const & contents, Test const * test) {
     } catch (SourceError const & e) {
         if ((test != nullptr) && test->shouldError == e.kind())
             return true;
+        if (e.kind() == "TypeError")
+            ++result->typecheck_fails;
+        std::cout << "kind: " << e.kind() << std::endl;
         std::cerr << color::red << "ERROR: " << color::reset << e << std::endl;
     } catch (std::exception const &e) {
         std::cerr << color::red << "ERROR: " << color::reset << e.what() << std::endl;
@@ -70,24 +82,26 @@ void RunSelectedTestSuite(const std::string& suiteName) {
         return;
     }
 
-    size_t ntests = it->second.size();
-    size_t fails = 0;
+    TestResult *result = new  TestResult();
+    result->total_tests = it->second.size();
+    result->total_fails = 0;
 
-    std::cout << "Running " << ntests << " tests in category: " << suiteName << std::endl;
+    std::cout << "Running " << result->total_tests << " tests in category: " << color::blue << suiteName << color::reset << std::endl;
     for (auto const & t : it->second) {
-        if (! compile(t.input, & t)) {
+        if (! compile(t.input, & t, result)) {
             std::cout << color::red << t.file << ":" << t.line << ": Test failed." << color::reset << std::endl;
             std::cout << "    " << t.input << std::endl;
-            ++fails;
+            ++result->total_fails;
             if (Options::exitAfterFailure)
                 break;
         }
     }
     std::cout << "Finished running tests in category: " << suiteName << std::endl;
-    if (fails > 0) {
-        std::cout << color::red << "FAIL. Total " << fails << " tests out of " << ntests << " failed." << color::reset << std::endl;
+    if (result->total_fails > 0) {
+        std::cout << color::red << "All: " << result->total_fails << "/" << result->total_tests << " failed." << color::reset << std::endl;
+        std::cout << color::red << "Typecheck: " << result->typecheck_fails << "/" << result->typechecks << " failed." << color::reset << std::endl;
     } else {
-        std::cout << color::green << "PASS. All " << ntests << " tests passed." << color::reset << std::endl;
+        std::cout << color::green << "PASS. All " << result->total_tests << " tests passed, " <<  result->typechecks << " were typecker tests." << color::reset << std::endl;
     }
 }
 
@@ -108,13 +122,12 @@ int main(int argc, char * argv []) {
         if (RUN_ALL) {
             RunAllTestSuites();
         } else {
-            RunSelectedTestSuite("arithmetic_tests");
-            //RunSelectedTestSuite("control_flow_tests");
+            RunSelectedTestSuite("function_tests");
             //RunSelectedTestSuite("function_tests");
         }
     } else {
         std::cout << "Compiling file " << filename << "..." << std::endl;
-        if (! compile(filename, /* test */nullptr))
+        if (! compile(filename, /* test */nullptr, nullptr))
             return EXIT_FAILURE;
     }
     return EXIT_SUCCESS;
