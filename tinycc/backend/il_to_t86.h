@@ -22,18 +22,18 @@ namespace tiny {
         }
 
         T86CodeGen & operator += (std::unique_ptr<t86::T86Ins> ins) {
-            program_.addInstruction(ins);
+            program_.addInstruction(std::move(ins));
             return *this;
         }
     private:
         void generate(Program const &program) {
-            for (auto const &[name, function]: program.functions_) {
+            for (auto const &[name, function]: program.getFunctions()) {
                 generateFunction(*function);
             }
         }
 
         void generateFunction(Function const &function) {
-            for (auto const &basicBlock: function.bbs_) {
+            for (auto const &basicBlock: function.getBasicBlocks()) {
                 generateBasicBlock(*basicBlock);
             }
         }

@@ -4,11 +4,13 @@
 
 #pragma once
 
-
 #include <memory>
+
+#include "operand.h"
 
 namespace tiny::t86 {
     class T86Ins {
+    public:
         //opcodes from: https://github.com/Gregofi/t86-with-debug/blob/master/src/t86/instruction.h
         enum class Opcode {
             MOV,
@@ -41,111 +43,74 @@ namespace tiny::t86 {
             PUSH,
             POP,
         };
-        virtual Opcode opcode() const = 0;
     };
 
-    class UnaryInstruction : public T86Ins {
-    protected:
-        std::string operand_;
+    class UnaryIns : public T86Ins {
     public:
-        UnaryInstruction(const std::string &operand)
+        UnaryIns(const Operand *operand)
                 : operand_(operand) {}
+    protected:
+        const Operand *operand_;
     };
 
-    class BinaryInstruction : public T86Ins {
-    protected:
-        std::string operand1_;
-        std::string operand2_;
+    class BinaryIns : public T86Ins {
     public:
-        BinaryInstruction(const std::string &operand1, const std::string &operand2)
+        BinaryIns(const Operand *operand1, const Operand *operand2)
                 : operand1_(operand1), operand2_(operand2) {}
-    };
-
-    class JumpInstruction : public T86Ins {
     protected:
-        std::string label_;
-    public:
-        JumpInstruction(const std::string &label)
-                : label_(label) {}
+        const Operand *operand1_;
+        const Operand *operand2_;
     };
 
-    class NoOperandInstruction : public T86Ins {
+    class NoOpIns : public T86Ins {
     };
 
-    // Define concrete classes for each T86Ins
-
-    class PushInstruction : public UnaryInstruction {
+    class JMPIns : public T86Ins {
     public:
-        PushInstruction(const std::string &operand)
-                : UnaryInstruction(operand) {}
-
-        Type type() const override {
-            return Type::PUSH;
-        }
+        JMPIns(const LabelOp *lbl)
+                : lbl_(lbl) {}
+    protected:
+        const LabelOp *lbl_;
     };
 
-    class PopInstruction : public UnaryInstruction {
+    class PUSHIns : public UnaryIns {
     public:
-        PopInstruction(const std::string &operand)
-                : UnaryInstruction(operand) {}
-
-        Type type() const override {
-            return Type::POP;
-        }
+        PUSHIns(const Operand *operand)
+                : UnaryIns(operand) {}
     };
 
-    class MovInstruction : public BinaryInstruction {
+    class POPIns : public UnaryIns {
     public:
-        MovInstruction(const std::string &operand1, const std::string &operand2)
-                : BinaryInstruction(operand1, operand2) {}
-
-        Type type() const override {
-            return Type::MOV;
-        }
+        POPIns(const Operand *operand)
+                : UnaryIns(operand) {}
     };
 
-    class CmpInstruction : public BinaryInstruction {
+    class MOVIns : public BinaryIns {
     public:
-        CmpInstruction(const std::string &operand1, const std::string &operand2)
-                : BinaryInstruction(operand1, operand2) {}
+        MOVIns(const Operand *operand1, const Operand *operand2)
+                : BinaryIns(operand1, operand2) {}
 
-        Type type() const override {
-            return Type::CMP;
-        }
     };
 
-    class JmpInstruction : public JumpInstruction {
+    class CMPIns : public BinaryIns {
     public:
-        JmpInstruction(const std::string &label)
-                : JumpInstruction(label) {}
+        CMPIns(const Operand *operand1, const Operand *operand2)
+                : BinaryIns(operand1, operand2) {}
 
-        Type type() const override {
-            return Type::JMP;
-        }
     };
 
-    class JgeInstruction : public JumpInstruction {
+    class JGEIns : public JMPIns {
     public:
-        JgeInstruction(const std::string &label)
-                : JumpInstruction(label) {}
-
-        Type type() const override {
-            return Type::JGE;
-        }
+        JGEIns(const LabelOp *lbl)
+                : JMPIns(lbl) {}
     };
 
-    class RetInstruction : public NoOperandInstruction {
+    class RETIns : public NoOpIns {
     public:
-        Type type() const override {
-            return Type::RET;
-        }
     };
 
-    class HaltInstruction : public NoOperandInstruction {
+    class HALTIns : public NoOpIns {
     public:
-        Type type() const override {
-            return Type::HALT;
-        }
     };
 
     class Program {

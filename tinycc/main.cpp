@@ -10,6 +10,7 @@
 #include "frontend/typechecker.h"
 #include "optimizer/ast_to_il.h"
 #include "optimizer/il_interpreter.h"
+#include "backend/il_to_t86.h"
 
 //tests
 #include "test/arithmetic/arithmetic_tests.h"
@@ -56,7 +57,7 @@ bool compile(std::string const & contents, Test const * test, TestResult *result
         // optimize
         // TODO
         // translate to target
-        // TODO
+        t86::Program t86 = T86CodeGen::translateProgram(p);
         // run on t86, or output and verify?
         return (test == nullptr) || ! (test->shouldError);
     } catch (SourceError const & e) {

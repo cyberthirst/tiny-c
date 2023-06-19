@@ -22,7 +22,7 @@ std::vector<Test> basic_calculator_tests = {
      } \
     int main() { \
          return add_n(0, 5); \
-     }", 5, true),
+     }", 5),
     TEST("\
     int main() { \
         return 1 + 10; \

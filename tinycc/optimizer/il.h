@@ -76,7 +76,7 @@ namespace tiny {
         RegType const type;
         AST const * const ast;
         std::string const name;
-    
+
     protected:
 
         friend class BasicBlock;
@@ -385,7 +385,7 @@ namespace tiny {
             using namespace colors;
             Instruction::print(p);
             p << " " << (*reg);
-            for (Instruction * r : regs) 
+            for (Instruction * r : regs)
                 p << *r << SYMBOL(", ");
             p << SYMBOL(")");
         }
@@ -610,7 +610,7 @@ namespace tiny {
     Instruction::TerminatorRegBB * BR(Args... args) { return new Instruction::TerminatorRegBB{Opcode::BR, args...}; }
 
 
-    /** Basic block. 
+    /** Basic block.
      */
     class BasicBlock {
     public:
@@ -631,7 +631,7 @@ namespace tiny {
             return dynamic_cast<Instruction::Terminator*>(insns_.back().get()) != nullptr;
         }
 
-        /** Appends the instruction to the given basic block. 
+        /** Appends the instruction to the given basic block.
          */
         Instruction * append(Instruction * ins) {
             insns_.push_back(std::unique_ptr<Instruction>{ins});
@@ -680,7 +680,7 @@ namespace tiny {
         return p;
     }
 
-    /** Function. 
+    /** Function.
     */
     class Function {
     public:
@@ -706,6 +706,8 @@ namespace tiny {
         size_t numArgs() const { return args_.size(); }
 
         Instruction const * getArg(size_t i) const { return args_[i].get(); }
+
+        const std::vector<std::unique_ptr<BasicBlock>>& getBasicBlocks() const { return bbs_; }
 
         void print(colors::ColorPrinter & p) const {
             using namespace colors;
@@ -754,6 +756,8 @@ namespace tiny {
             auto i = functions_.find(name);
             return (i == functions_.end()) ? nullptr : i->second;
         }
+
+        const std::unordered_map<Symbol, Function *>& getFunctions() const { return functions_; }
 
         void print(colors::ColorPrinter & p) const {
             using namespace colors;
