@@ -30,7 +30,7 @@ namespace tiny {
 
         ILInterpreter(Program const & p):p_{p} {}
 
-        /** Register value. 
+        /** Reg value.
          */
         struct Reg {
             Instruction const * ins;
