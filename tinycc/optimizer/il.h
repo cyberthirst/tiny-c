@@ -726,9 +726,25 @@ namespace tiny {
             }
         }
 
+        // gets called when we allocate space for a local variable, size is the size of the variable in bytes
+        // when we leave a block, then call this function with negative size
+        void updateLocalsSize(int size) {
+            localsSize_ += size;
+            if (localsSize_ > localsMaxSize_)
+                localsMaxSize_ = localsSize_;
+        }
+
+        size_t getLocalsSize() const { return localsMaxSize_; }
+
         BasicBlock * start() const { return bbs_[0].get(); }
         RegType retType_;
     private:
+        // size of the local variables in bytes, used for stack allocation in prologue
+        // stores the maximum over all basic blocks
+        // when we leave a basic block, we update the size - if the current size + the basic block size
+        // is larger than the current maximum, we update the maximum
+        size_t localsSize_ = 0;
+        size_t localsMaxSize_ = 0;
         std::vector<std::unique_ptr<Instruction>> args_;
         std::vector<std::unique_ptr<BasicBlock>> bbs_;
     };

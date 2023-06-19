@@ -34,7 +34,7 @@ namespace tiny {
             (*this) += LDI(RegType::Int, ast->value, ast);
         }
 
-        void visit(ASTDouble * ast) override { 
+        void visit(ASTDouble * ast) override {
             (*this) += LDF(RegType::Float, ast->value, ast);
         }
 
@@ -400,6 +400,7 @@ namespace tiny {
             Context(BasicBlock * locals, BasicBlock * mergeBB, BasicBlock * continueBB):
                     localsBlock{locals}, breakBlock{mergeBB}, continueBlock{continueBB} {
             }
+            int sizeOfLocals = 0; //size of locals in bytes
 
         }; // ASTToILTranslator::Context
 
@@ -438,6 +439,7 @@ namespace tiny {
         }
 
         void leaveBlock() {
+            f_->updateLocalsSize(-contexts_.back().sizeOfLocals);
             contexts_.pop_back();
         }
 
@@ -463,6 +465,8 @@ namespace tiny {
         Instruction * addVariable(Symbol name, size_t size) {
             Instruction * res = contexts_.back().localsBlock->append( ALLOCA( RegType::Int,
                                                                               static_cast<int64_t>(size), name.name()));
+            f_->updateLocalsSize(size);
+            contexts_.back().sizeOfLocals += size;
             contexts_.back().locals.insert(std::make_pair(name, res));
             return res;
         }
