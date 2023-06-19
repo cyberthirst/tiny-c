@@ -788,6 +788,10 @@ namespace tiny {
         virtual void visit(Instruction::TerminatorReg* instr) { MARK_AS_UNUSED(instr); NOT_IMPLEMENTED; }
         virtual void visit(Instruction::TerminatorB* instr) { MARK_AS_UNUSED(instr); NOT_IMPLEMENTED; }
         virtual void visit(Instruction::TerminatorRegBB* instr) { MARK_AS_UNUSED(instr); NOT_IMPLEMENTED; }
+    protected:
+        void visitChild(Instruction* instr) {
+            instr->accept(this);
+        }
     };
 
     inline void Instruction::ImmI::accept(IRVisitor * v) { v->visit(this); }

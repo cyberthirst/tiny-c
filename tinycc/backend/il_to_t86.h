@@ -7,7 +7,7 @@
 #include "../optimizer/il.h"
 
 namespace tiny {
-    class TargetCodeGenerator : public IRVisitor {
+    class T86CodeGen : public IRVisitor {
     public:
         void generate(Program const &program) {
             for (auto const &[name, function]: program.functions_) {
@@ -24,11 +24,10 @@ namespace tiny {
 
         void generateBasicBlock(BasicBlock const &basicBlock) {
             for (size_t i = 0; i < basicBlock.size(); ++i) {
-                Instruction const *instruction = basicBlock[i];
-                instruction->accept(*this);
+                Instruction *instruction = const_cast<Instruction*>(basicBlock[i]);
+                visitChild(instruction);
             }
         }
 
-        // Implement the visit methods for different instructions...
     };
 }
