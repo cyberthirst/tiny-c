@@ -732,9 +732,16 @@ namespace tiny {
             localsSize_ += size;
             if (localsSize_ > localsMaxSize_)
                 localsMaxSize_ = localsSize_;
+            if (size > 0)
+                totalLocalsSize_ += size;
         }
 
-        size_t getStackSize() const { return localsMaxSize_; }
+        size_t getStackSize(const bool stupid) const {
+            if (stupid)
+                return totalLocalsSize_;
+            else
+                return localsMaxSize_;
+        }
 
         BasicBlock * start() const { return bbs_[0].get(); }
         RegType retType_;
@@ -745,6 +752,7 @@ namespace tiny {
         // is larger than the current maximum, we update the maximum
         size_t localsSize_ = 0;
         size_t localsMaxSize_ = 0;
+        size_t totalLocalsSize_ = 0;
         std::vector<std::unique_ptr<Instruction>> args_;
         std::vector<std::unique_ptr<BasicBlock>> bbs_;
     };

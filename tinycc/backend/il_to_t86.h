@@ -8,12 +8,46 @@
 #include "reg_allocator.h"
 #include "t86_instruction.h"
 
-/*
- * A visitor that translates the program in IR to T86.
- * It outputs a Program object that consists of T86 instruction class instances, it doesn't
- * output the assembly.
- */
 namespace tiny {
+    /*
+     * A stack allocator that allocates variables on the stack.
+     * It is used to allocate local variables in functions, keeps
+     * track of the offsets of the variables in the stack frame.
+     *
+     * Currently, a very stupid strategy is used. Each local var
+     * is allocated on the stack, we ignore scoping, so if a variable
+     * is out of scope, we don't reuse it's space. This is a tradeoff,
+     * since if we wanted an effective strategy, we would need liveness
+     * and points-to analyses.
+     */
+    class StackAllocator {
+    public:
+        StackAllocator() : offset_(0) {}
+
+        int allocate(Instruction const *var, size_t size) {
+            offsets_.emplace(var, offset_);
+            offset_ += size;
+            return offsets_.at(var);
+        }
+
+        int getOffset(Instruction const *var) const {
+            return offsets_.at(var);
+        }
+
+        int getStackSize() const {
+            return offset_;
+        }
+    private:
+        int offset_;
+        std::unordered_map<Instruction const *, int> offsets_;
+    };
+
+
+    /*
+    * A visitor that translates the program in IR to T86.
+    * It outputs a Program object that consists of T86 instruction class instances, it doesn't
+    * output the assembly.
+    */
     class T86CodeGen : public IRVisitor {
     public:
         static t86::Program translateProgram(Program const &program) {
@@ -30,33 +64,35 @@ namespace tiny {
     private:
         void generate(Program const &program) {
             for (auto const &[name, function]: program.getFunctions()) {
+                currentFunction_ = function;
                 generateFunction(*function);
             }
         }
 
         void generateCdeclPrologue(size_t stackSize) {
             // 1. save base pointer
-            (*this) += std::make_unique<t86::PUSHIns>(new RegOp(allocator_.getBP()));
+            (*this) += std::make_unique<t86::PUSHIns>(new RegOp(regAllocator_.getBP()));
             // 2. set base pointer to stack pointer
-            (*this) += std::make_unique<t86::MOVIns>(new RegOp(allocator_.getBP()),
-                                                     new RegOp(allocator_.getSP()));
+            (*this) += std::make_unique<t86::MOVIns>(new RegOp(regAllocator_.getBP()),
+                                                     new RegOp(regAllocator_.getSP()));
             // 3. allocate stack space for local variables
-            (*this) += std::make_unique<t86::SUBIns>(new RegOp(allocator_.getSP()),
+            (*this) += std::make_unique<t86::SUBIns>(new RegOp(regAllocator_.getSP()),
                                                      new ImmOp(stackSize));
         }
 
         void generateCdeclEpilogue() {
             // 1. restore base pointer
-            (*this) += std::make_unique<t86::POPIns>(new RegOp(allocator_.getBP()));
+            (*this) += std::make_unique<t86::POPIns>(new RegOp(regAllocator_.getBP()));
             // 2. return
             (*this) += std::make_unique<t86::RETIns>();
         }
 
         void generateFunction(Function const &function) {
-            generateCdeclPrologue(function.getStackSize());
+            generateCdeclPrologue(function.getStackSize(true));
             for (auto const &basicBlock: function.getBasicBlocks()) {
                 generateBasicBlock(*basicBlock);
             }
+            generateCdeclEpilogue();
         }
 
         void generateBasicBlock(BasicBlock const &basicBlock) {
@@ -68,16 +104,30 @@ namespace tiny {
 
         void visit(Instruction::ImmI* instr) override {
             switch (instr->opcode) {
-                case Opcode::LDI:
+                case Opcode::LDI: {
                     // Direct translation of IR's LDI to x86's MOV instruction.
                     *this += std::make_unique<t86::MOVIns>(
-                            new RegOp(allocator_.allocate()),
+                            new RegOp(regAllocator_.allocate()),
                             new ImmOp(instr->value)
                     );
                     break;
-                case Opcode::ALLOCA:
-                default:
+                }
+                case Opcode::ALLOCA: {
+                    int offset = stackAllocator_.allocate(instr, instr->value);
+                    //we create a new local variable on the stack and initialize it to 0
+                    //the alloca instruction is then accompanied by a store instruction,
+                    //   - in ast_to_il we have: (*this) += ST(addr, arg);, the alloca represents the addr
+                    //which initializes the variable to appropriate value
+                    (*this) += std::make_unique<t86::MOVIns>(
+                            new RegOffsetOp(regAllocator_.getBP(), offset),
+                            new ImmOp(0)
+                            );
+                    assert(stackAllocator_.getStackSize() <= currentFunction_->getStackSize(true));
+                    break;
+                }
+                default: {
                     NOT_IMPLEMENTED;
+                }
             }
         }
 
@@ -141,7 +191,9 @@ namespace tiny {
                     NOT_IMPLEMENTED;
             }
         }*/
-        AbstractRegAllocator allocator_;
+        AbstractRegAllocator regAllocator_;
+        StackAllocator stackAllocator_;
+        Function *currentFunction_;
         t86::Program program_;
     };
 
