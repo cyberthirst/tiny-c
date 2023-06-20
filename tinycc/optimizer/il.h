@@ -734,7 +734,7 @@ namespace tiny {
                 localsMaxSize_ = localsSize_;
         }
 
-        size_t getLocalsSize() const { return localsMaxSize_; }
+        size_t getStackSize() const { return localsMaxSize_; }
 
         BasicBlock * start() const { return bbs_[0].get(); }
         RegType retType_;
