@@ -642,6 +642,10 @@ namespace tiny {
 
         Instruction const * operator[](size_t i) const { return insns_[i].get(); }
 
+        const std::vector<std::unique_ptr<Instruction>>& getInstructions() const {
+            return insns_;
+        }
+
     private:
 
         friend class Function;
@@ -817,7 +821,7 @@ namespace tiny {
         virtual void visit(Instruction::TerminatorB* instr) { MARK_AS_UNUSED(instr); NOT_IMPLEMENTED; }
         virtual void visit(Instruction::TerminatorRegBB* instr) { MARK_AS_UNUSED(instr); NOT_IMPLEMENTED; }
     protected:
-        void visitChild(Instruction* instr) {
+        void visitChild(Instruction *instr) {
             instr->accept(this);
         }
     };

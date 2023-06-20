@@ -57,11 +57,20 @@ namespace tiny {
             return std::move(gen.program_);
         }
 
-        T86CodeGen & operator += (std::unique_ptr<t86::T86Ins> ins) {
-            program_.addInstruction(std::move(ins));
+        T86CodeGen & operator += (t86::T86Ins *ins) {
+            program_.addInstruction(std::unique_ptr<t86::T86Ins>{ins});
+            lastResult_ = ins;
             return *this;
         }
     private:
+        template<typename T>
+        typename std::enable_if<std::is_base_of<Instruction, T>::value, t86::T86Ins *>::type
+        translate(std::unique_ptr<T> const & child) {
+            visitChild(child.get());
+            return lastResult_;
+        }
+
+
         void generate(Program const &program) {
             for (auto const &[name, function]: program.getFunctions()) {
                 currentFunction_ = function;
@@ -71,20 +80,20 @@ namespace tiny {
 
         void generateCdeclPrologue(size_t stackSize) {
             // 1. save base pointer
-            (*this) += std::make_unique<t86::PUSHIns>(new RegOp(regAllocator_.getBP()));
+            (*this) += new t86::PUSHIns(new RegOp(regAllocator_.getBP()));
             // 2. set base pointer to stack pointer
-            (*this) += std::make_unique<t86::MOVIns>(new RegOp(regAllocator_.getBP()),
+            (*this) += new t86::MOVIns(new RegOp(regAllocator_.getBP()),
                                                      new RegOp(regAllocator_.getSP()));
             // 3. allocate stack space for local variables
-            (*this) += std::make_unique<t86::SUBIns>(new RegOp(regAllocator_.getSP()),
+            (*this) += new t86::SUBIns(new RegOp(regAllocator_.getSP()),
                                                      new ImmOp(stackSize));
         }
 
         void generateCdeclEpilogue() {
             // 1. restore base pointer
-            (*this) += std::make_unique<t86::POPIns>(new RegOp(regAllocator_.getBP()));
+            (*this) += new t86::POPIns(new RegOp(regAllocator_.getBP()));
             // 2. return
-            (*this) += std::make_unique<t86::RETIns>();
+            (*this) += new t86::RETIns();
         }
 
         void generateFunction(Function const &function) {
@@ -96,9 +105,8 @@ namespace tiny {
         }
 
         void generateBasicBlock(BasicBlock const &basicBlock) {
-            for (size_t i = 0; i < basicBlock.size(); ++i) {
-                Instruction *instruction = const_cast<Instruction*>(basicBlock[i]);
-                visitChild(instruction);
+            for (auto &ins : basicBlock.getInstructions()) {
+                translate(ins);
             }
         }
 
@@ -106,7 +114,7 @@ namespace tiny {
             switch (instr->opcode) {
                 case Opcode::LDI: {
                     // Direct translation of IR's LDI to x86's MOV instruction.
-                    *this += std::make_unique<t86::MOVIns>(
+                    *this += new t86::MOVIns(
                             new RegOp(regAllocator_.allocate()),
                             new ImmOp(instr->value)
                     );
@@ -118,7 +126,7 @@ namespace tiny {
                     //the alloca instruction is then accompanied by a store instruction,
                     //   - in ast_to_il we have: (*this) += ST(addr, arg);, the alloca represents the addr
                     //which initializes the variable to appropriate value
-                    (*this) += std::make_unique<t86::MOVIns>(
+                    (*this) += new t86::MOVIns(
                             new RegOffsetOp(regAllocator_.getBP(), offset),
                             new ImmOp(0)
                             );
@@ -191,6 +199,7 @@ namespace tiny {
                     NOT_IMPLEMENTED;
             }
         }*/
+        t86::T86Ins *lastResult_;
         AbstractRegAllocator regAllocator_;
         StackAllocator stackAllocator_;
         Function *currentFunction_;
