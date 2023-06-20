@@ -419,7 +419,7 @@ namespace tiny {
             f_ = p_.addFunction(name);
             Instruction * fReg = FUN(name,name.name());
             p_.globals()->append(fReg);
-            bb_ = f_->addBasicBlock("prolog");
+            bb_ = f_->addBasicBlock("entry");
             contexts_.push_back(Context{bb_});
             contexts_.front().locals.insert(std::make_pair(name, fReg));
             return f_;

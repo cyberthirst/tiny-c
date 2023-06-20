@@ -57,19 +57,19 @@ namespace tiny {
             return std::move(gen.program_);
         }
 
-        T86CodeGen & operator += (t86::T86Ins *ins) {
-            program_.addInstruction(std::unique_ptr<t86::T86Ins>{ins});
+        T86CodeGen & operator += (t86::Instruction *ins) {
+            program_.addInstruction(std::unique_ptr<t86::Instruction>{ins});
             lastResult_ = ins;
             return *this;
         }
     private:
-        template<typename T>
-        typename std::enable_if<std::is_base_of<Instruction, T>::value, t86::T86Ins *>::type
-        translate(std::unique_ptr<T> const & child) {
-            visitChild(child.get());
+        t86::Instruction* translate(Instruction *child) {
+            // need to check if child is not null before dereferencing
+            if(child != nullptr){
+                visitChild(child);
+            }
             return lastResult_;
         }
-
 
         void generate(Program const &program) {
             for (auto const &[name, function]: program.getFunctions()) {
@@ -106,7 +106,7 @@ namespace tiny {
 
         void generateBasicBlock(BasicBlock const &basicBlock) {
             for (auto &ins : basicBlock.getInstructions()) {
-                translate(ins);
+                translate(ins.get());
             }
         }
 
@@ -155,34 +155,35 @@ namespace tiny {
                 default:
                     NOT_IMPLEMENTED;
             }
-        }
+        }*/
 
         // Visitor for binary operation on two registers.
         void visit(Instruction::RegReg* instr) override {
             switch (instr->opcode) {
-                case Opcode::ADD:
-                    // Direct translation of IR's ADD to x86's ADD instruction.
-                    // Assumes instr->dst is the destination register and instr->src is the source register.
-                    *this += std::make_unique<t86::ADDIns>(
-                            new RegOp(instr->dst),
-                            new RegOp(instr->src)
+                case Opcode::ADD: {
+                    t86::MOVIns *i1 = dynamic_cast<t86::MOVIns*>(translate(instr->reg1));
+                    t86::MOVIns *i2 = dynamic_cast<t86::MOVIns*>(translate(instr->reg2));
+                    assert(i1 != nullptr && i2 != nullptr && "ADD instruction should be preceded by two MOV instructions");
+                    (*this) += new t86::ADDIns(
+                        i1->operand1_,
+                        i2->operand1_
                     );
                     break;
+                }
 
-                case Opcode::SUB:
+                case Opcode::SUB: {
                     // Direct translation of IR's SUB to x86's SUB instruction.
-                    *this += std::make_unique<t86::SUBIns>(
+                    /**this += new t86::SUBIns(
                             new RegOp(instr->dst),
                             new RegOp(instr->src)
-                    );
+                    );*/
                     break;
-
-                    // Add more cases as needed...
+                }
                 default:
                     NOT_IMPLEMENTED;
             }
         }
-
+        /*
         // Visitor for function call.
         void visit(Instruction::RegRegs* instr) override {
             switch (instr->opcode) {
@@ -199,7 +200,7 @@ namespace tiny {
                     NOT_IMPLEMENTED;
             }
         }*/
-        t86::T86Ins *lastResult_;
+        t86::Instruction *lastResult_;
         AbstractRegAllocator regAllocator_;
         StackAllocator stackAllocator_;
         Function *currentFunction_;

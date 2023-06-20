@@ -9,7 +9,7 @@
 #include "operand.h"
 
 namespace tiny::t86 {
-    class T86Ins {
+    class Instruction {
     public:
         //opcodes from: https://github.com/Gregofi/t86-with-debug/blob/master/src/t86/instruction.h
         enum class Opcode {
@@ -43,35 +43,34 @@ namespace tiny::t86 {
             PUSH,
             POP,
         };
+        virtual ~Instruction() = default;
+        virtual std::string toString() const = 0;
     };
 
 
 
-    class UnaryIns : public T86Ins {
+    class UnaryIns : public Instruction {
     public:
         UnaryIns(const Operand *operand)
                 : operand_(operand) {}
-    protected:
         const Operand *operand_;
     };
 
-    class BinaryIns : public T86Ins {
+    class BinaryIns : public Instruction {
     public:
         BinaryIns(const Operand *operand1, const Operand *operand2)
                 : operand1_(operand1), operand2_(operand2) {}
-    protected:
         const Operand *operand1_;
         const Operand *operand2_;
     };
 
-    class NoOpIns : public T86Ins {
+    class NoOpIns : public Instruction {
     };
 
-    class JMPIns : public T86Ins {
+    class JMPIns : public Instruction {
     public:
         JMPIns(const LabelOp *lbl)
                 : lbl_(lbl) {}
-    protected:
         const LabelOp *lbl_;
     };
 
@@ -79,27 +78,39 @@ namespace tiny::t86 {
     #define UNARY_INSTRUCTION(name) \
     class name##Ins : public UnaryIns { \
     public: \
-        name##Ins(const Operand *operand) \
-                : UnaryIns(operand) {} \
+    name##Ins(const Operand *operand) \
+            : UnaryIns(operand) {} \
+    std::string toString() const override { \
+        return #name " " + operand_->toString(); \
+    } \
     };
 
     #define BINARY_INSTRUCTION(name) \
     class name##Ins : public BinaryIns { \
     public: \
-        name##Ins(const Operand *dest, const Operand *src) \
-                : BinaryIns(dest, src) {} \
+    name##Ins(const Operand *dest, const Operand *src) \
+            : BinaryIns(dest, src) {} \
+    std::string toString() const override { \
+        return #name " " + operand1_->toString() + ", " + operand2_->toString(); \
+    } \
     };
 
     #define NOOP_INSTRUCTION(name) \
     class name##Ins : public NoOpIns { \
     public: \
+    std::string toString() const override { \
+        return #name; \
+    } \
     };
 
     #define JMP_INSTRUCTION(name) \
     class name##Ins : public JMPIns { \
     public: \
-        name##Ins(const LabelOp *lbl) \
-            : JMPIns(lbl) {} \
+    name##Ins(const LabelOp *lbl) \
+        : JMPIns(lbl) {} \
+    std::string toString() const override { \
+        return #name " " + lbl_->toString(); \
+    } \
     };
 
     UNARY_INSTRUCTION(PUSH);
@@ -125,20 +136,20 @@ namespace tiny::t86 {
         Program& operator=(Program&&) = default;
         ~Program() = default;
 
-        void addInstruction(std::unique_ptr<T86Ins> instruction) {
+        void addInstruction(std::unique_ptr<Instruction> instruction) {
             instructions_.push_back(std::move(instruction));
         }
 
-        std::vector<std::unique_ptr<T86Ins>>& instructions() {
+        std::vector<std::unique_ptr<Instruction>>& instructions() {
             return instructions_;
         }
 
-        const std::vector<std::unique_ptr<T86Ins>>& instructions() const {
+        const std::vector<std::unique_ptr<Instruction>>& instructions() const {
             return instructions_;
         }
 
     private:
-        std::vector<std::unique_ptr<T86Ins>> instructions_;
+        std::vector<std::unique_ptr<Instruction>> instructions_;
     };
 
 } // namespace tiny
