@@ -45,6 +45,8 @@ namespace tiny::t86 {
         };
     };
 
+
+
     class UnaryIns : public T86Ins {
     public:
         UnaryIns(const Operand *operand)
@@ -73,45 +75,46 @@ namespace tiny::t86 {
         const LabelOp *lbl_;
     };
 
-    class PUSHIns : public UnaryIns {
-    public:
-        PUSHIns(const Operand *operand)
-                : UnaryIns(operand) {}
+
+    #define UNARY_INSTRUCTION(name) \
+    class name##Ins : public UnaryIns { \
+    public: \
+        name##Ins(const Operand *operand) \
+                : UnaryIns(operand) {} \
     };
 
-    class POPIns : public UnaryIns {
-    public:
-        POPIns(const Operand *operand)
-                : UnaryIns(operand) {}
+    #define BINARY_INSTRUCTION(name) \
+    class name##Ins : public BinaryIns { \
+    public: \
+        name##Ins(const Operand *dest, const Operand *src) \
+                : BinaryIns(dest, src) {} \
     };
 
-    class MOVIns : public BinaryIns {
-    public:
-        MOVIns(const Operand *operand1, const Operand *operand2)
-                : BinaryIns(operand1, operand2) {}
-
+    #define NOOP_INSTRUCTION(name) \
+    class name##Ins : public NoOpIns { \
+    public: \
     };
 
-    class CMPIns : public BinaryIns {
-    public:
-        CMPIns(const Operand *operand1, const Operand *operand2)
-                : BinaryIns(operand1, operand2) {}
-
+    #define JMP_INSTRUCTION(name) \
+    class name##Ins : public JMPIns { \
+    public: \
+        name##Ins(const LabelOp *lbl) \
+            : JMPIns(lbl) {} \
     };
 
-    class JGEIns : public JMPIns {
-    public:
-        JGEIns(const LabelOp *lbl)
-                : JMPIns(lbl) {}
-    };
+    UNARY_INSTRUCTION(PUSH);
+    UNARY_INSTRUCTION(POP);
 
-    class RETIns : public NoOpIns {
-    public:
-    };
+    BINARY_INSTRUCTION(MOV);
+    BINARY_INSTRUCTION(CMP);
+    BINARY_INSTRUCTION(SUB);
+    BINARY_INSTRUCTION(ADD);
 
-    class HALTIns : public NoOpIns {
-    public:
-    };
+    NOOP_INSTRUCTION(RET);
+    NOOP_INSTRUCTION(HALT);
+
+    JMP_INSTRUCTION(JZ);
+    JMP_INSTRUCTION(JGE);
 
     class Program {
     public:
