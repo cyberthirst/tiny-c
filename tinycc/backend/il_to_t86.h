@@ -7,6 +7,7 @@
 #include "../optimizer/il.h"
 #include "reg_allocator.h"
 #include "t86_instruction.h"
+#include "common/colors.h"
 
 namespace tiny {
     /*

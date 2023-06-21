@@ -148,6 +148,17 @@ namespace tiny::t86 {
             return instructions_;
         }
 
+        void print(colors::ColorPrinter & p) const {
+            using namespace colors;
+            p << COMMENT("; t86 instructions") << NEWLINE;
+            p << ".text" << NEWLINE;
+            size_t counter = 0;
+            for (auto &i : instructions_) {
+                p << counter++ << "  " << i->toString() << NEWLINE;
+            }
+        }
+
+
     private:
         std::vector<std::unique_ptr<Instruction>> instructions_;
     };

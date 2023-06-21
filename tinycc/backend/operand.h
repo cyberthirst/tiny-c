@@ -26,12 +26,24 @@ private:
     Reg reg_;
 };
 
+class MemRegOffsetOp : public Operand {
+public:
+    MemRegOffsetOp(const Reg& reg, int offset) : reg_(reg), offset_(offset) { }
+
+    std::string toString() const override {
+        return "[" + reg_.toString() + (offset_ >= 0 ? " + " : " - ") + std::to_string(std::abs(offset_)) + "]";
+    }
+private:
+    Reg reg_;
+    int offset_;
+};
+
 class RegOffsetOp : public Operand {
 public:
     RegOffsetOp(const Reg& reg, int offset) : reg_(reg), offset_(offset) { }
 
     std::string toString() const override {
-        return reg_.toString() + " + " + std::to_string(offset_);
+        return reg_.toString() + (offset_ >= 0 ? " + " : " - ") + std::to_string(std::abs(offset_));
     }
 private:
     Reg reg_;
