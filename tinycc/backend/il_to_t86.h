@@ -4,10 +4,13 @@
 
 #pragma once
 
+#include <queue>
+
 #include "../optimizer/il.h"
 #include "reg_allocator.h"
 #include "t86_instruction.h"
 #include "common/colors.h"
+#include "common/symbol.h"
 
 namespace tiny {
     /*
@@ -56,11 +59,12 @@ namespace tiny {
             T86CodeGen gen;
             gen.generate(program);
             //TODO generate HALT instruction
-            return std::move(gen.program_);
+            return std::move(gen.p_);
         }
 
         T86CodeGen & operator += (t86::Instruction *ins) {
-            program_.addInstruction(std::unique_ptr<t86::Instruction>{ins});
+            //p_.addInstruction(std::unique_ptr<t86::Instruction>{ins});
+            bb_->append(ins);
             lastResult_ = ins;
             return *this;
         }
@@ -74,10 +78,10 @@ namespace tiny {
         }
 
         void generate(Program const &program) {
-            for (auto const &[name, function]: program.getFunctions()) {
-                currentFunction_ = function;
-                generateFunction(*function);
-            }
+            Symbol main = Symbol{"main"};
+            enterFunction(main);
+            bbWorklist_.emplace(program.getFunction(main)->start());
+            generateBasicBlock();
         }
 
         void generateCdeclPrologue(size_t stackSize) {
@@ -98,18 +102,24 @@ namespace tiny {
             (*this) += new t86::RETIns();
         }
 
-        void generateFunction(Function const &function) {
-            generateCdeclPrologue(function.getStackSize(true));
-            for (auto const &basicBlock: function.getBasicBlocks()) {
-                generateBasicBlock(*basicBlock);
-            }
-            generateCdeclEpilogue();
+        t86::Function * enterFunction(Symbol name) {
+            ASSERT(f_ == nullptr);
+            f_ = p_.addFunction(name);
+            return f_;
         }
 
-        void generateBasicBlock(BasicBlock const &basicBlock) {
-            for (auto &ins : basicBlock.getInstructions()) {
-                translate(ins.get());
-                std::cout << colors::ColorPrinter::colorize(program_) << std::endl;
+        void leaveFunction() {
+            f_ = nullptr;
+        }
+
+        void generateBasicBlock() {
+            while (!bbWorklist_.empty()) {
+                BasicBlock *bb = bbWorklist_.front();
+                bb_ = f_->addBasicBlock(bb->name);
+                bbWorklist_.pop();
+                for (auto const &instr: bb->getInstructions()) {
+                    translate(instr.get());
+                }
             }
         }
 
@@ -118,7 +128,6 @@ namespace tiny {
             RegOp *regOp = dynamic_cast<RegOp*>(dest);
             if(regOp != nullptr) {
                 regMap_[i] = regOp;
-                lastMovedTo_ = regOp;
             }
         }
 
@@ -136,7 +145,7 @@ namespace tiny {
                     //   - in ast_to_il we have: (*this) += ST(addr, arg);, the alloca represents the addr
                     //which initializes the variable to appropriate value
                     addMOV(instr, new MemRegOffsetOp(regAllocator_.getBP(), offset), new ImmOp(0));
-                    assert(stackAllocator_.getStackSize() <= currentFunction_->getStackSize(true));
+                    assert(stackAllocator_.getStackSize() <= f_->getStackSize(true));
                     break;
                 }
                 default: {
@@ -206,6 +215,7 @@ namespace tiny {
         void visit(Instruction::TerminatorB* instr) override {
             switch (instr->opcode) {
                 case Opcode::JMP: {
+                    (*this) += new t86::JMPIns(new LabelOp(bb_->name));
                     break;
                 }
                 default:
@@ -242,13 +252,19 @@ namespace tiny {
                     NOT_IMPLEMENTED;
             }
         }*/
+
+        //maps original IR instructions to the corresponding registers
         std::unordered_map<Instruction*, RegOp *> regMap_;
         t86::Instruction *lastResult_;
-        RegOp *lastMovedTo_;
         AbstractRegAllocator regAllocator_;
         StackAllocator stackAllocator_;
-        Function *currentFunction_;
-        t86::Program program_;
+
+        t86::BasicBlock *bb_;
+        t86::Function *f_;
+
+        std::queue<BasicBlock *> bbWorklist_;
+
+        t86::Program p_;
     };
 
 }
