@@ -1,6 +1,6 @@
 #include "il.h"
 
-namespace tiny {
+namespace tiny::il {
 
     void Instruction::TerminatorB::print(colors::ColorPrinter & p) const {
         using namespace colors;

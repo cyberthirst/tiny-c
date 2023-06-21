@@ -7,47 +7,13 @@
 #include <queue>
 
 #include "../optimizer/il.h"
-#include "reg_allocator.h"
 #include "t86_instruction.h"
+#include "program_structures.h"
 #include "common/colors.h"
 #include "common/symbol.h"
+#include "stack.h"
 
 namespace tiny {
-    /*
-     * A stack allocator that allocates variables on the stack.
-     * It is used to allocate local variables in functions, keeps
-     * track of the offsets of the variables in the stack frame.
-     *
-     * Currently, a very stupid strategy is used. Each local var
-     * is allocated on the stack, we ignore scoping, so if a variable
-     * is out of scope, we don't reuse it's space. This is a tradeoff,
-     * since if we wanted an effective strategy, we would need liveness
-     * and points-to analyses.
-     */
-    class StackAllocator {
-    public:
-        //
-        StackAllocator() : offset_(8) {}
-
-        int allocate(il::Instruction const *var, size_t size) {
-            offsets_.emplace(var, offset_);
-            offset_ += size;
-            return -offsets_.at(var);
-        }
-
-        int getOffset(il::Instruction const *var) const {
-            return -offsets_.at(var);
-        }
-
-        int getStackSize() const {
-            return offset_ - 8;
-        }
-    private:
-        int offset_;
-        std::unordered_map<il::Instruction const *, int> offsets_;
-    };
-
-
     /*
     * A visitor that translates the program in IR to T86.
     * It outputs a Program object that consists of T86 instruction class instances, it doesn't
@@ -120,6 +86,7 @@ namespace tiny {
                 for (auto const &instr: bb->getInstructions()) {
                     translate(instr.get());
                 }
+                std::cout << colors::ColorPrinter::colorize(p_);
             }
         }
 

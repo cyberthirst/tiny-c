@@ -5,71 +5,76 @@
 #pragma once
 
 #include <string>
-
 #include "register.h"
 
-class Operand {
-public:
-    virtual ~Operand() = default;
-    virtual std::string toString() const = 0;
-};
+namespace tiny {
 
-class RegOp : public Operand {
-public:
-    RegOp(const Reg& reg) : reg_(reg) { }
+    class Operand {
+    public:
+        virtual ~Operand() = default;
 
-    std::string toString() const override {
-        return reg_.toString();
-    }
+        virtual std::string toString() const = 0;
+    };
 
-private:
-    Reg reg_;
-};
+    class RegOp : public Operand {
+    public:
+        RegOp(const Reg &reg) : reg_(reg) {}
 
-class MemRegOffsetOp : public Operand {
-public:
-    MemRegOffsetOp(const Reg& reg, int offset) : reg_(reg), offset_(offset) { }
+        std::string toString() const override {
+            return reg_.toString();
+        }
 
-    std::string toString() const override {
-        return "[" + reg_.toString() + (offset_ >= 0 ? " + " : " - ") + std::to_string(std::abs(offset_)) + "]";
-    }
-private:
-    Reg reg_;
-    int offset_;
-};
+    private:
+        Reg reg_;
+    };
 
-class RegOffsetOp : public Operand {
-public:
-    RegOffsetOp(const Reg& reg, int offset) : reg_(reg), offset_(offset) { }
+    class MemRegOffsetOp : public Operand {
+    public:
+        MemRegOffsetOp(const Reg &reg, int offset) : reg_(reg), offset_(offset) {}
 
-    std::string toString() const override {
-        return reg_.toString() + (offset_ >= 0 ? " + " : " - ") + std::to_string(std::abs(offset_));
-    }
-private:
-    Reg reg_;
-    int offset_;
-};
+        std::string toString() const override {
+            return "[" + reg_.toString() + (offset_ >= 0 ? " + " : " - ") + std::to_string(std::abs(offset_)) + "]";
+        }
 
-class ImmOp : public Operand {
-public:
-    ImmOp(int value) : value_(value) { }
+    private:
+        Reg reg_;
+        int offset_;
+    };
 
-    std::string toString() const override {
-        return std::to_string(value_);
-    }
+    class RegOffsetOp : public Operand {
+    public:
+        RegOffsetOp(const Reg &reg, int offset) : reg_(reg), offset_(offset) {}
 
-private:
-    int value_;
-};
+        std::string toString() const override {
+            return reg_.toString() + (offset_ >= 0 ? " + " : " - ") + std::to_string(std::abs(offset_));
+        }
 
-class LabelOp : public Operand {
-public:
-    LabelOp(std::string label) : label_(std::move(label)) { }
+    private:
+        Reg reg_;
+        int offset_;
+    };
 
-    std::string toString() const override {
-        return label_;
-    }
-private:
-    std::string label_;
-};
+    class ImmOp : public Operand {
+    public:
+        ImmOp(int value) : value_(value) {}
 
+        std::string toString() const override {
+            return std::to_string(value_);
+        }
+
+    private:
+        int value_;
+    };
+
+    class LabelOp : public Operand {
+    public:
+        LabelOp(std::string label) : label_(std::move(label)) {}
+
+        std::string toString() const override {
+            return label_;
+        }
+
+    private:
+        std::string label_;
+    };
+}
