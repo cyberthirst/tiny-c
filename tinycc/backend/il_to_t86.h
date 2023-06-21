@@ -23,20 +23,21 @@ namespace tiny {
      */
     class StackAllocator {
     public:
-        StackAllocator() : offset_(0) {}
+        //
+        StackAllocator() : offset_(8) {}
 
         int allocate(Instruction const *var, size_t size) {
             offsets_.emplace(var, offset_);
             offset_ += size;
-            return offsets_.at(var);
+            return -offsets_.at(var);
         }
 
         int getOffset(Instruction const *var) const {
-            return offsets_.at(var);
+            return -offsets_.at(var);
         }
 
         int getStackSize() const {
-            return offset_;
+            return offset_ - 8;
         }
     private:
         int offset_;
@@ -108,6 +109,16 @@ namespace tiny {
         void generateBasicBlock(BasicBlock const &basicBlock) {
             for (auto &ins : basicBlock.getInstructions()) {
                 translate(ins.get());
+                std::cout << colors::ColorPrinter::colorize(program_) << std::endl;
+            }
+        }
+
+        void addMOV(Instruction *i, Operand *dest, Operand *src) {
+            (*this) += new t86::MOVIns(dest, src);
+            RegOp *regOp = dynamic_cast<RegOp*>(dest);
+            if(regOp != nullptr) {
+                regMap_[i] = regOp;
+                lastMovedTo_ = regOp;
             }
         }
 
@@ -115,10 +126,7 @@ namespace tiny {
             switch (instr->opcode) {
                 case Opcode::LDI: {
                     // Direct translation of IR's LDI to x86's MOV instruction.
-                    *this += new t86::MOVIns(
-                            new RegOp(regAllocator_.allocate()),
-                            new ImmOp(instr->value)
-                    );
+                    addMOV(instr, new RegOp(regAllocator_.allocate()), new ImmOp(instr->value));
                     break;
                 }
                 case Opcode::ALLOCA: {
@@ -127,10 +135,7 @@ namespace tiny {
                     //the alloca instruction is then accompanied by a store instruction,
                     //   - in ast_to_il we have: (*this) += ST(addr, arg);, the alloca represents the addr
                     //which initializes the variable to appropriate value
-                    (*this) += new t86::MOVIns(
-                            new RegOffsetOp(regAllocator_.getBP(), offset),
-                            new ImmOp(0)
-                            );
+                    addMOV(instr, new MemRegOffsetOp(regAllocator_.getBP(), offset), new ImmOp(0));
                     assert(stackAllocator_.getStackSize() <= currentFunction_->getStackSize(true));
                     break;
                 }
@@ -140,34 +145,27 @@ namespace tiny {
             }
         }
 
-        // Visitor for register load instruction.
-        /*void visit(Instruction::Reg* instr) override {
+        void visit(Instruction::Reg* instr) override {
             switch (instr->opcode) {
-                case Opcode::LD:
-                    // Direct translation of IR's LD to x86's MOV instruction.
-                    // Assumes instr->dst is the destination register and instr->src is the source register.
-                    *this += std::make_unique<t86::MOVIns>(
-                            new RegOp(instr->dst),
-                            new RegOp(instr->src)
-                    );
+                case Opcode::LD: {
+                    addMOV(instr, new RegOp(regAllocator_.allocate()),
+                                  new MemRegOffsetOp(regAllocator_.getBP(), stackAllocator_.getOffset(instr->reg)));
                     break;
-
-                    // Add more cases as needed...
+                }
                 default:
                     NOT_IMPLEMENTED;
             }
-        }*/
+        }
 
-        // Visitor for binary operation on two registers.
+        // Visitor for bnary operation on two registers.
         void visit(Instruction::RegReg* instr) override {
             switch (instr->opcode) {
                 case Opcode::ADD: {
-                    t86::MOVIns *i1 = dynamic_cast<t86::MOVIns*>(translate(instr->reg1));
-                    t86::MOVIns *i2 = dynamic_cast<t86::MOVIns*>(translate(instr->reg2));
-                    assert(i1 != nullptr && i2 != nullptr && "ADD instruction should be preceded by two MOV instructions");
+                    RegOp *op1 = regMap_[instr->reg1];
+                    RegOp *op2 = regMap_[instr->reg2];
                     (*this) += new t86::ADDIns(
-                        i1->operand1_,
-                        i2->operand1_
+                            op1,
+                            op2
                     );
                     break;
                 }
@@ -180,8 +178,51 @@ namespace tiny {
                     );*/
                     break;
                 }
+                case Opcode::ST: {
+                    //1. load the address of the variable to be stored to
+                    MemRegOffsetOp *dest = new MemRegOffsetOp(regAllocator_.getBP(),
+                                                              stackAllocator_.getOffset(instr->reg1));
+                    //2. load the register containing the value to be stored
+                    RegOp *src = regMap_[instr->reg2];
+                    addMOV(instr, dest, src);
+                    break;
+                }
                 default:
                     NOT_IMPLEMENTED;
+            }
+        }
+
+        void visit(Instruction::Terminator* instr) override {
+            switch (instr->opcode) {
+                case Opcode::RET: {
+                    break;
+                }
+                default:
+                    ;
+                    //NOT_IMPLEMENTED;
+            }
+        }
+
+        void visit(Instruction::TerminatorB* instr) override {
+            switch (instr->opcode) {
+                case Opcode::JMP: {
+                    break;
+                }
+                default:
+                    ;
+                    //NOT_IMPLEMENTED;
+            }
+        }
+
+        void visit(Instruction::TerminatorReg* instr) override {
+            switch (instr->opcode) {
+                case Opcode::RETR: {
+
+                    break;
+                }
+                default:
+                    ;
+                    //NOT_IMPLEMENTED;
             }
         }
         /*
@@ -201,7 +242,9 @@ namespace tiny {
                     NOT_IMPLEMENTED;
             }
         }*/
+        std::unordered_map<Instruction*, RegOp *> regMap_;
         t86::Instruction *lastResult_;
+        RegOp *lastMovedTo_;
         AbstractRegAllocator regAllocator_;
         StackAllocator stackAllocator_;
         Function *currentFunction_;
