@@ -5,6 +5,71 @@
 
 namespace tiny {
 
+    class Optimizer {
+    public:
+        static void optimize(Program& program) {
+            Optimizer opt;
+            opt.removeRedundantJMPBBs(program);
+        }
+    private:
+        Optimizer() = default;
+        //some BBs only contain a JMP instruction, this function removes them
+        void removeRedundantJMPBBs(Program& program) {
+            // Step 1: Identify redundant blocks
+            std::unordered_map<BasicBlock*, BasicBlock*> redundantBlocks;
+            for (const auto& [name, function] : program.getFunctions()) {
+                for (const auto& bbPtr : function->getBasicBlocks()) {
+                    if (bbPtr->size() == 1) {  // Check if only one instruction
+                        auto* terminatorB = dynamic_cast<Instruction::TerminatorB*>(bbPtr->operator[](0));
+                        // Check if the single instruction is a JMP
+                        if (terminatorB && terminatorB->opcode == Opcode::JMP) {
+                            redundantBlocks[bbPtr.get()] = terminatorB->target;
+                        }
+                    }
+                }
+            }
+
+            // Step 2: Redirect JMPs and BRs
+            for (const auto& [name, function] : program.getFunctions()) {
+                for (const auto& bbPtr : function->getBasicBlocks()) {
+                    for (size_t i = 0; i < bbPtr->size(); ++i) {
+                        auto* terminatorB = dynamic_cast<Instruction::TerminatorB*>(bbPtr->operator[](i));
+                        if (terminatorB && terminatorB->opcode == Opcode::JMP) {
+                            auto found = redundantBlocks.find(terminatorB->target);
+                            // If the current JMP target is a redundant block, redirect the JMP
+                            if (found != redundantBlocks.end()) {
+                                terminatorB->target = found->second;
+                            }
+                            continue;
+                        }
+                        auto* terminatorRegBB = dynamic_cast<Instruction::TerminatorRegBB*>(bbPtr->operator[](i));
+                        if (terminatorRegBB && terminatorRegBB->opcode == Opcode::BR) {
+                            auto found1 = redundantBlocks.find(terminatorRegBB->target1);
+                            if (found1 != redundantBlocks.end()) {
+                                terminatorRegBB->target1 = found1->second;
+                            }
+                            auto found2 = redundantBlocks.find(terminatorRegBB->target2);
+                            if (found2 != redundantBlocks.end()) {
+                                terminatorRegBB->target2 = found2->second;
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Step 3: remove all the redundant blocks from each function
+            for (const auto& [name, function] : program.getFunctions()) {
+                function->getBasicBlocks().erase(std::remove_if(function->getBasicBlocks().begin(),
+                                                                function->getBasicBlocks().end(),
+                                                                [&](const std::unique_ptr<BasicBlock>& bb) {
+                                                                    return redundantBlocks.count(bb.get()) > 0;
+                                                                }),
+                                                 function->getBasicBlocks().end());
+            }
+        }
+
+
+    }; // tiny::Optimizer
 
     template<typename T>
     class State {

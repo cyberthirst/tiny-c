@@ -11,6 +11,7 @@
 #include "optimizer/ast_to_il.h"
 #include "optimizer/il_interpreter.h"
 #include "backend/il_to_t86.h"
+#include "optimizer/optimizer.h"
 
 //tests
 #include "test/arithmetic/arithmetic_tests.h"
@@ -34,6 +35,17 @@ struct TestResult {
     size_t typecheck_fails = 0;
 };
 
+bool testIRProgram(Program const & p, Test const * test) {
+    if (test->marked)
+        std::cout << ColorPrinter::colorize(p) << std::endl;
+    int64_t result = ILInterpreter::run(p);
+    if (result != test->result) {
+        std::cerr << "ERROR: expected " << test->result << ", got " << result << color::reset << std::endl;
+        return false;
+    }
+    return true;
+}
+
 bool compile(std::string const & contents, Test const * test, TestResult *result) {
     try {
         // parse
@@ -46,16 +58,13 @@ bool compile(std::string const & contents, Test const * test, TestResult *result
             ++result->typechecks;
         Program p = ASTToILTranslator::translateProgram(ast);
         if (test && test->testResult && Options::testIR) {
-            if (test->marked)
-                std::cout << ColorPrinter::colorize(p) << std::endl;
-            int64_t result = ILInterpreter::run(p);
-            if (result != test->result) {
-                std::cerr << "ERROR: expected " << test->result << ", got " << result << color::reset << std::endl;
+            if (!testIRProgram(p, test))
                 return false;
-            }
         }
         // optimize
-        // TODO
+        Optimizer::optimize(p);
+        if (!testIRProgram(p, test))
+            return false;
         // translate to target
         t86::Program t86 = T86CodeGen::translateProgram(p);
         // run on t86, or output and verify?

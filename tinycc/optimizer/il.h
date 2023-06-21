@@ -640,7 +640,7 @@ namespace tiny {
 
         size_t size() const { return insns_.size(); }
 
-        Instruction const * operator[](size_t i) const { return insns_[i].get(); }
+        Instruction * operator[](size_t i) const { return insns_[i].get(); }
 
         const std::vector<std::unique_ptr<Instruction>>& getInstructions() const {
             return insns_;
@@ -712,6 +712,8 @@ namespace tiny {
         Instruction const * getArg(size_t i) const { return args_[i].get(); }
 
         const std::vector<std::unique_ptr<BasicBlock>>& getBasicBlocks() const { return bbs_; }
+
+        std::vector<std::unique_ptr<BasicBlock>>& getBasicBlocks() { return bbs_; }
 
         void print(colors::ColorPrinter & p) const {
             using namespace colors;
