@@ -35,10 +35,10 @@ struct TestResult {
     size_t typecheck_fails = 0;
 };
 
-bool testIRProgram(Program const & p, Test const * test) {
+bool testIRProgram(il::Program const & p, Test const * test) {
     if (test->marked)
         std::cout << ColorPrinter::colorize(p) << std::endl;
-    int64_t result = ILInterpreter::run(p);
+    int64_t result = il::ILInterpreter::run(p);
     if (result != test->result) {
         std::cerr << "ERROR: expected " << test->result << ", got " << result << color::reset << std::endl;
         return false;
@@ -56,7 +56,7 @@ bool compile(std::string const & contents, Test const * test, TestResult *result
         Typechecker::checkProgram(ast);
         if (test && !test->testResult)
             ++result->typechecks;
-        Program p = ASTToILTranslator::translateProgram(ast);
+        il::Program p = il::ASTToILTranslator::translateProgram(ast);
         if (test && test->testResult && Options::testIR) {
             if (!testIRProgram(p, test))
                 return false;

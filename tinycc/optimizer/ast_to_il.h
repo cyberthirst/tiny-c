@@ -4,7 +4,7 @@
 #include "frontend/ast.h"
 #include "il.h"
 
-namespace tiny {
+namespace tiny::il {
 
     class ASTToILTranslator : public ASTVisitor {
     public:
@@ -12,25 +12,25 @@ namespace tiny {
         static Program translateProgram(std::unique_ptr<AST> const & root) {
             ASTToILTranslator t;
             t.translate(root);
-            return std::move(t.p_); 
+            return std::move(t.p_);
         }
 
-        void visit(AST * ast) override { 
-            MARK_AS_UNUSED(ast); 
+        void visit(AST * ast) override {
+            MARK_AS_UNUSED(ast);
             UNREACHABLE;
         }
 
-        /** Translating the program simply means translating all its statements in order. 
+        /** Translating the program simply means translating all its statements in order.
          */
         void visit(ASTProgram * ast) override {
             for (auto & s : ast->statements)
                 translate(s);
         }
-        
+
         /** Translating the literals is trivial. Since for simplicity reasons we do not allow literals to appear as
          *  arguments of operator instructions, each literal has to be first loaded as an immediate value to a new register.
          */
-        void visit(ASTInteger * ast) override { 
+        void visit(ASTInteger * ast) override {
             (*this) += LDI(RegType::Int, ast->value, ast);
         }
 
@@ -38,26 +38,26 @@ namespace tiny {
             (*this) += LDF(RegType::Float, ast->value, ast);
         }
 
-        void visit(ASTChar * ast) override { 
+        void visit(ASTChar * ast) override {
             (*this) += LDI(RegType::Int, ast->value, ast);
         }
 
         /** Translating string literals is a bit harder - each string literal is deduplicated and stored as a new
          *  global variable that is also initialized with the contents of the literal.
          */
-        void visit(ASTString* ast) override { 
+        void visit(ASTString* ast) override {
             MARK_AS_UNUSED(ast);
             NOT_IMPLEMENTED;
         }
 
-        /** Identifier is translated as a variable read. Note that this is as the address. 
+        /** Identifier is translated as a variable read. Note that this is as the address.
         */
-        void visit(ASTIdentifier* ast) override { 
-            // TODO How to deal with structures? 
+        void visit(ASTIdentifier* ast) override {
+            // TODO How to deal with structures?
             lastResult_ = getVariable(ast->name);
             //if we have lValue_ then the identifier will be written into, and thus we don't need to generate any instructions
             //as this will be handled later in assignment which will generate the store
-            if (lValue_) 
+            if (lValue_)
                 lValue_ = false;
             //identifier is used as rValue, thus we need to load it
             else
@@ -69,22 +69,22 @@ namespace tiny {
          *  so this code is unreachable.
          */
         void visit(ASTType* ast) override { MARK_AS_UNUSED(ast); UNREACHABLE; }
-        void visit(ASTPointerType* ast) override { MARK_AS_UNUSED(ast); UNREACHABLE; } 
-        void visit(ASTArrayType* ast) override { MARK_AS_UNUSED(ast); UNREACHABLE; } 
+        void visit(ASTPointerType* ast) override { MARK_AS_UNUSED(ast); UNREACHABLE; }
+        void visit(ASTArrayType* ast) override { MARK_AS_UNUSED(ast); UNREACHABLE; }
         void visit(ASTNamedType* ast) override { MARK_AS_UNUSED(ast); UNREACHABLE; }
 
         /** Sequence simply translates its elements.
          */
-        void visit(ASTSequence* ast) override { 
-            for (auto & i : ast->body) 
+        void visit(ASTSequence* ast) override {
+            for (auto & i : ast->body)
                 translate(i);
         }
 
         /** */
-        void visit(ASTBlock* ast) override { 
+        void visit(ASTBlock* ast) override {
             ASSERT(f_ != nullptr);
             enterBlock();
-            for (auto & i : ast->body) 
+            for (auto & i : ast->body)
                 translate(i);
             leaveBlock();
         }
@@ -101,10 +101,10 @@ namespace tiny {
             }
 
         }
-        
+
         /** Enter a new function.
          */
-        void visit(ASTFunDecl* ast) override { 
+        void visit(ASTFunDecl* ast) override {
             Function * f = enterFunction(ast->name);
             f->retType_ = registerTypeFor(ast->type());
             for (size_t i = 0, e = ast->args.size(); i != e; ++i) {
@@ -129,7 +129,7 @@ namespace tiny {
         }
 
         /** Nothing to do for a struct declaration in the translation phase, the type has been created by the typechecker already.
-         */ 
+         */
         void visit(ASTStructDecl* ast) override { MARK_AS_UNUSED(ast); lastResult_ = nullptr; }
 
         /** Nothing to do for a function ptr declaration in the translation phase, the type has already been created by the typechecker.
@@ -165,7 +165,7 @@ namespace tiny {
             enterBasicBlock(mergeBB);
         }
 
-        void visit(ASTSwitch* ast) override { 
+        void visit(ASTSwitch* ast) override {
             MARK_AS_UNUSED(ast);
             NOT_IMPLEMENTED;
         }
@@ -187,7 +187,7 @@ namespace tiny {
             enterBasicBlock(mergeBB);
         }
 
-        void visit(ASTDoWhile* ast) override { 
+        void visit(ASTDoWhile* ast) override {
             BasicBlock *bodyBB = f_->addBasicBlock(STR("do-while-body"));
             BasicBlock *condBB = f_->addBasicBlock(STR("do-while-cond"));
             BasicBlock *mergeBB = f_->addBasicBlock(STR("do-while-merge"));
@@ -253,8 +253,8 @@ namespace tiny {
             (*this) += RETR(lastResult_, ast);
             enterBasicBlock(f_->addBasicBlock());
         }
-        
-        void visit(ASTBinaryOp* ast) override { 
+
+        void visit(ASTBinaryOp* ast) override {
             Instruction * lhs = translate(ast->left);
             Instruction * rhs = translate(ast->right);
             if (ast->op == Symbol::Mul) {
@@ -285,7 +285,7 @@ namespace tiny {
 
         }
 
-        void visit(ASTAssignment* ast) override { 
+        void visit(ASTAssignment* ast) override {
             Instruction * lvalue = translateLValue(ast->lvalue);
             Instruction * value = translate(ast->value);
             (*this) += ST(lvalue, value, ast);
@@ -299,7 +299,7 @@ namespace tiny {
             (*this) += SUB(binaryResult(zero, lastResult_), zero, lastResult_);
         }
 
-        void visit(ASTUnaryPostOp* ast) override { 
+        void visit(ASTUnaryPostOp* ast) override {
             MARK_AS_UNUSED(ast);
             NOT_IMPLEMENTED;
         }
@@ -314,17 +314,17 @@ namespace tiny {
             (*this) += LD(lastResult_->type, lastResult_, ast);
         }
 
-        void visit(ASTIndex* ast) override { 
+        void visit(ASTIndex* ast) override {
             MARK_AS_UNUSED(ast);
             NOT_IMPLEMENTED;
         }
 
-        void visit(ASTMember* ast) override { 
+        void visit(ASTMember* ast) override {
             MARK_AS_UNUSED(ast);
             NOT_IMPLEMENTED;
         }
 
-        void visit(ASTMemberPtr* ast) override { 
+        void visit(ASTMemberPtr* ast) override {
             MARK_AS_UNUSED(ast);
             NOT_IMPLEMENTED;
         }
@@ -341,31 +341,31 @@ namespace tiny {
             (*this) += CALL(fun->retType_, f, args, ast);
         }
 
-        void visit(ASTCast* ast) override { 
+        void visit(ASTCast* ast) override {
             MARK_AS_UNUSED(ast);
             NOT_IMPLEMENTED;
         }
 
-        void visit(ASTPrint* ast) override { 
+        void visit(ASTPrint* ast) override {
             MARK_AS_UNUSED(ast);
             NOT_IMPLEMENTED;
         }
 
-        void visit(ASTScan* ast) override { 
+        void visit(ASTScan* ast) override {
             MARK_AS_UNUSED(ast);
             NOT_IMPLEMENTED;
         }
 
     private:
 
-        template<typename T> 
+        template<typename T>
         typename std::enable_if<std::is_base_of<AST, T>::value, Instruction *>::type
         translate(std::unique_ptr<T> const & child) {
             visitChild(child.get());
             return lastResult_;
-        }   
+        }
 
-        template<typename T> 
+        template<typename T>
         typename std::enable_if<std::is_base_of<AST, T>::value, Instruction *>::type
         translateLValue(std::unique_ptr<T> const & child) {
             bool old = lValue_;
@@ -375,7 +375,7 @@ namespace tiny {
             return lastResult_;
         }
 
-        /** Adds the given instruction to the program, adding it to the current basic block, which should not be terminated. 
+        /** Adds the given instruction to the program, adding it to the current basic block, which should not be terminated.
          */
         ASTToILTranslator & operator += (Instruction * ins) {
             ASSERT(bb_ != nullptr);
@@ -405,7 +405,7 @@ namespace tiny {
         }; // ASTToILTranslator::Context
 
         RegType registerTypeFor(Type * t) {
-            return t == Type::getDouble() ? RegType::Float : RegType::Int;            
+            return t == Type::getDouble() ? RegType::Float : RegType::Int;
         }
 
 

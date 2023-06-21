@@ -4,7 +4,7 @@
 #include <functional>
 #include "il.h"
 
-namespace tiny {
+namespace tiny::il {
 
     /** A very simple interpreter of our intermediate language. 
         Such code is of course not part of a real compiler, but it's quite helpful for us to validate the translated

@@ -7,22 +7,22 @@ namespace tiny {
 
     class Optimizer {
     public:
-        static void optimize(Program& program) {
+        static void optimize(il::Program& program) {
             Optimizer opt;
             opt.removeRedundantJMPBBs(program);
         }
     private:
         Optimizer() = default;
         //some BBs only contain a JMP instruction, this function removes them
-        void removeRedundantJMPBBs(Program& program) {
+        void removeRedundantJMPBBs(il::Program& program) {
             // Step 1: Identify redundant blocks
-            std::unordered_map<BasicBlock*, BasicBlock*> redundantBlocks;
+            std::unordered_map<il::BasicBlock*, il::BasicBlock*> redundantBlocks;
             for (const auto& [name, function] : program.getFunctions()) {
                 for (const auto& bbPtr : function->getBasicBlocks()) {
                     if (bbPtr->size() == 1) {  // Check if only one instruction
-                        auto* terminatorB = dynamic_cast<Instruction::TerminatorB*>(bbPtr->operator[](0));
+                        auto* terminatorB = dynamic_cast<il::Instruction::TerminatorB*>(bbPtr->operator[](0));
                         // Check if the single instruction is a JMP
-                        if (terminatorB && terminatorB->opcode == Opcode::JMP) {
+                        if (terminatorB && terminatorB->opcode == il::Opcode::JMP) {
                             redundantBlocks[bbPtr.get()] = terminatorB->target;
                         }
                     }
@@ -33,8 +33,8 @@ namespace tiny {
             for (const auto& [name, function] : program.getFunctions()) {
                 for (const auto& bbPtr : function->getBasicBlocks()) {
                     for (size_t i = 0; i < bbPtr->size(); ++i) {
-                        auto* terminatorB = dynamic_cast<Instruction::TerminatorB*>(bbPtr->operator[](i));
-                        if (terminatorB && terminatorB->opcode == Opcode::JMP) {
+                        auto* terminatorB = dynamic_cast<il::Instruction::TerminatorB*>(bbPtr->operator[](i));
+                        if (terminatorB && terminatorB->opcode == il::Opcode::JMP) {
                             auto found = redundantBlocks.find(terminatorB->target);
                             // If the current JMP target is a redundant block, redirect the JMP
                             if (found != redundantBlocks.end()) {
@@ -42,8 +42,8 @@ namespace tiny {
                             }
                             continue;
                         }
-                        auto* terminatorRegBB = dynamic_cast<Instruction::TerminatorRegBB*>(bbPtr->operator[](i));
-                        if (terminatorRegBB && terminatorRegBB->opcode == Opcode::BR) {
+                        auto* terminatorRegBB = dynamic_cast<il::Instruction::TerminatorRegBB*>(bbPtr->operator[](i));
+                        if (terminatorRegBB && terminatorRegBB->opcode == il::Opcode::BR) {
                             auto found1 = redundantBlocks.find(terminatorRegBB->target1);
                             if (found1 != redundantBlocks.end()) {
                                 terminatorRegBB->target1 = found1->second;
@@ -61,7 +61,7 @@ namespace tiny {
             for (const auto& [name, function] : program.getFunctions()) {
                 function->getBasicBlocks().erase(std::remove_if(function->getBasicBlocks().begin(),
                                                                 function->getBasicBlocks().end(),
-                                                                [&](const std::unique_ptr<BasicBlock>& bb) {
+                                                                [&](const std::unique_ptr<il::BasicBlock>& bb) {
                                                                     return redundantBlocks.count(bb.get()) > 0;
                                                                 }),
                                                  function->getBasicBlocks().end());
@@ -75,11 +75,11 @@ namespace tiny {
     class State {
     public:
 
-        T & get(Instruction * reg) {
+        T & get(il::Instruction * reg) {
             return state_[reg]; // create bottom if does not exist yet
         }
 
-        void set(Instruction * reg, T val) {
+        void set(il::Instruction * reg, T val) {
             state_[reg] = val;
         }
 
@@ -90,7 +90,7 @@ namespace tiny {
         }
 
     private:
-        std::unordered_map<Instruction *, T> state_;
+        std::unordered_map<il::Instruction *, T> state_;
 
     }; // tiny::State
 
@@ -100,11 +100,11 @@ namespace tiny {
     class ForwardAnalysis {
     public:
 
-        void analyze(BasicBlock * start, State<T> initialState) {
+        void analyze(il::BasicBlock * start, State<T> initialState) {
             q_.push_back(start, initialState);
             while (!q_.empty()) {
                 // get next basic block to analyze
-                BasicBlock * b = q_.back();
+                il::BasicBlock * b = q_.back();
                 q_.pop_back();
                 State<T> state = inputStates_[b];
                 // process all instructions
@@ -119,15 +119,15 @@ namespace tiny {
 
     protected:
 
-        void analyzeBB(BasicBlock * b, State<T> const & inputState) {
+        void analyzeBB(il::BasicBlock * b, State<T> const & inputState) {
             if (inputStates_[b].mergeWith(inputState))
                 q_.push_back(b);
         }
 
-        virtual void processInstruction(Instruction * ins, State<T> & state) = 0;
+        virtual void processInstruction(il::Instruction * ins, State<T> & state) = 0;
 
-        std::vector<BasicBlock *> q_;
-        std::unordered_map<BasicBlock *, State<T>> inputStates_;
+        std::vector<il::BasicBlock *> q_;
+        std::unordered_map<il::BasicBlock *, State<T>> inputStates_;
     }; // tiny::ForwardAnalysis
 
 
@@ -181,9 +181,9 @@ namespace tiny {
 
     protected:
 
-        void processInstruction(Instruction * ins, State<SimpleCPValue> & state) override {
+        void processInstruction(il::Instruction * ins, State<SimpleCPValue> & state) override {
             switch (ins->opcode) {
-                case Opcode::ADD:
+                case il::Opcode::ADD:
                     // TODO
                     break;
             }

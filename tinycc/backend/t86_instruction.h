@@ -290,9 +290,9 @@ namespace tiny::t86 {
             p << COMMENT("; t86 instructions") << NEWLINE;
             p << ".text" << NEWLINE;
             size_t counter = 0;
-            for (auto &i : instructions_) {
+            /*for (auto &i : instructions_) {
                 p << counter++ << "  " << i->toString() << NEWLINE;
-            }
+            }*/
         }
 
 

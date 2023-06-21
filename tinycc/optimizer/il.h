@@ -7,7 +7,7 @@
 #include "common/colors.h"
 #include "frontend/ast.h"
 
-namespace tiny {
+namespace tiny::il {
 
     class Function;
     class BasicBlock;
