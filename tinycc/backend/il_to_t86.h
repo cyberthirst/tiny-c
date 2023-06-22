@@ -22,7 +22,7 @@ namespace tiny {
     class T86CodeGen : public il::IRVisitor {
     public:
         static t86::Program translateProgram(il::Program const &program) {
-            T86CodeGen gen(program);
+            T86CodeGen gen{program};
             gen.generate(program);
             //TODO generate HALT instruction
             return std::move(gen.p_);
@@ -35,7 +35,7 @@ namespace tiny {
             return *this;
         }
 
-        T86CodeGen(il::Program const &program) : ilp_{program} {}
+        T86CodeGen(const il::Program &program) : ilp_{program} {}
     private:
         t86::Instruction* translate(il::Instruction *child) {
             // need to check if child is not null before dereferencing
@@ -47,22 +47,27 @@ namespace tiny {
 
         void generate(il::Program const &program) {
             Symbol main = Symbol{"main"};
-            enterFunction(main);
+            assert(program.getFunction(main) != nullptr && "main function not found");
             addFunToWorklist(main);
-            addBBToWorklist(program.getFunction(main)->start());
             while (!funWorklist_.empty()) {
-                const il::Function *fun = funWorklist_.front();
+                Symbol sfun = funWorklist_.front();
                 funWorklist_.pop();
-                enterFunction(fun->);
+                enterFunction(sfun);
+                bool generatePrologue = true;
                 while (!bbWorklist_.empty()) {
                     il::BasicBlock *bb = bbWorklist_.front();
                     bb_ = f_->addBasicBlock(bb->name);
                     bbWorklist_.pop();
+                    if (generatePrologue) {
+                        generateCdeclPrologue(program.getFunction(sfun));
+                        generatePrologue = false;
+                    }
                     for (auto const &instr: bb->getInstructions()) {
                         translate(instr.get());
                     }
-                    std::cout << colors::ColorPrinter::colorize(p_);
                 }
+                std::cout << colors::ColorPrinter::colorize(p_);
+                leaveFunction();
             }
         }
 
@@ -74,22 +79,33 @@ namespace tiny {
         }
 
         void addFunToWorklist(Symbol sym) {
-            const il::Function *fun = ilp_.getFunction(sym);
-            if (funVisited_.find(fun) == funVisited_.end()) {
-                funVisited_.insert(fun);
-                funWorklist_.push(fun);
+            if (funVisited_.find(sym) == funVisited_.end()) {
+                funVisited_.insert(sym);
+                funWorklist_.push(sym);
             }
         }
 
-        void generateCdeclPrologue(size_t stackSize) {
+        void generateCdeclPrologue(const il::Function *fun) {
             // 1. save base pointer
             (*this) += new t86::PUSHIns(new RegOp(regAllocator_.getBP()));
             // 2. set base pointer to stack pointer
             (*this) += new t86::MOVIns(new RegOp(regAllocator_.getBP()),
                                                      new RegOp(regAllocator_.getSP()));
             // 3. allocate stack space for local variables
+            int stackSize = fun->getStackSize(true);
             (*this) += new t86::SUBIns(new RegOp(regAllocator_.getSP()),
                                                      new ImmOp(stackSize));
+            //take the current function
+            //and move the arguments from the stack to registers
+            for (size_t i = 0; i < fun->numArgs(); ++i) {
+                auto *instr = dynamic_cast<il::Instruction::ImmI*>(const_cast<il::Instruction *>(fun->getArg(i)));
+                //we allocate new register for the argument
+                //we then move the argument from the stack to the register
+                //we add 8 because we have to skip the return address
+                //we multiply by 8 because the size of our values is currently 8
+                addMOV(instr, new RegOp(regAllocator_.allocate()),
+                       new MemRegOffsetOp(regAllocator_.getBP(), 8 + instr->value * 8));
+            }
         }
 
         void generateCdeclEpilogue() {
@@ -97,28 +113,21 @@ namespace tiny {
             (*this) += new t86::POPIns(new RegOp(regAllocator_.getBP()));
             // 2. return
             (*this) += new t86::RETIns();
+            // the caller is responsible for cleaning up the arguments from the stack
         }
 
         t86::Function * enterFunction(Symbol name) {
             ASSERT(f_ == nullptr);
             f_ = p_.addFunction(name);
+            addBBToWorklist(ilp_.getFunction(name)->start());
+            //generateCdeclPrologue(ilp_.getFunction(name));
             return f_;
         }
 
         void leaveFunction() {
+            assert(bbWorklist_.empty() && "Not all basic blocks of a function were translated");
             f_ = nullptr;
-        }
-
-        void generateBasicBlock() {
-            while (!bbWorklist_.empty()) {
-                il::BasicBlock *bb = bbWorklist_.front();
-                bb_ = f_->addBasicBlock(bb->name);
-                bbWorklist_.pop();
-                for (auto const &instr: bb->getInstructions()) {
-                    translate(instr.get());
-                }
-                std::cout << colors::ColorPrinter::colorize(p_);
-            }
+            bb_ = nullptr;
         }
 
         void addMOV(il::Instruction *i, Operand *dest, Operand *src) {
@@ -147,6 +156,24 @@ namespace tiny {
                     //assert(stackAllocator_.getStackSize() <= f_->getStackSize(true));
                     break;
                 }
+                //currently we have a primitive way of handling function arguments
+                // - the caller pushes the arguments on the stack
+                // - the calle then MOVs the arguments from the stack to the function's stack frame
+                // - the callee then uses the arguments from the stack frame
+                // - additionally we assume that all the arguments have fixed size
+                // - this is all done as part of the function prologue
+                case il::Opcode::ARG: {
+                    il::Instruction::ImmI *i = dynamic_cast<il::Instruction::ImmI*>(instr);
+                    //we allocate new register for the argument
+                    //we then move the argument from the stack to the register
+                    //we add 8 because we have to skip the return address
+                    //we multiply by 8 because the size of our values is currently 8
+                    addMOV(instr, new RegOp(regAllocator_.allocate()),
+                                      new MemRegOffsetOp(regAllocator_.getBP(), 8 + i->value * 8));
+
+                    break;
+                }
+
                 default: {
                     NOT_IMPLEMENTED;
                 }
@@ -168,7 +195,18 @@ namespace tiny {
         // Visitor for bnary operation on two registers.
         void visit(il::Instruction::RegReg* instr) override {
             switch (instr->opcode) {
-                case il::Opcode::ADD: {
+                #define ARITHMETIC_INS(IR_INSTR, T86_INSTR) \
+                    case il::Opcode::IR_INSTR: { \
+                    RegOp *op1 = regMap_[instr->reg1]; \
+                    RegOp *op2 = regMap_[instr->reg2]; \
+                    (*this) += new t86::T86_INSTR##Ins( \
+                        op1, \
+                        op2 \
+                    ); \
+                    regMap_[instr] = op1; \
+                    break; \
+                }
+                /*case il::Opcode::ADD: {
                     RegOp *op1 = regMap_[instr->reg1];
                     RegOp *op2 = regMap_[instr->reg2];
                     (*this) += new t86::ADDIns(
@@ -177,16 +215,10 @@ namespace tiny {
                     );
                     regMap_[instr] = op1;
                     break;
-                }
+                }*/
 
-                case il::Opcode::SUB: {
-                    // Direct translation of IR's SUB to x86's SUB instruction.
-                    /**this += new t86::SUBIns(
-                            new RegOp(instr->dst),
-                            new RegOp(instr->src)
-                    );*/
-                    break;
-                }
+                ARITHMETIC_INS(ADD, ADD)
+                ARITHMETIC_INS(SUB, SUB)
 
                 case il::Opcode::LT: {
                     (*this) += new t86::CMPIns(
@@ -273,7 +305,7 @@ namespace tiny {
 
         void visit(il::Instruction::RegRegs* instr) override {
             switch (instr->opcode) {
-                case il::Opcode::CALL:
+                case il::Opcode::CALL: {
                     //1. push all the arguments to the stack in reverse order
                     for (auto it = instr->regs.rbegin(); it != instr->regs.rend(); ++it) {
                         (*this) += new t86::PUSHIns(regMap_[*it]);
@@ -289,10 +321,11 @@ namespace tiny {
                             new RegOp(regAllocator_.getSP()),
                             new ImmOp(instr->regs.size() * 8)
                     );
-
+                    il::Instruction::ImmS *sfun = dynamic_cast<il::Instruction::ImmS *>(instr->reg);
+                    assert(sfun && "Currently we only support calls via symbols");
+                    addFunToWorklist(Symbol{sfun->value});
                     break;
-
-                    // Add more cases as needed...
+                }
                 default:
                     NOT_IMPLEMENTED;
             }
@@ -310,11 +343,11 @@ namespace tiny {
         std::queue<il::BasicBlock *> bbWorklist_;
         std::unordered_set<il::BasicBlock *> bbVisited_;
 
-        std::queue<const il::Function *> funWorklist_;
-        std::unordered_set<const il::Function *> funVisited_;
+        std::queue<Symbol> funWorklist_;
+        std::unordered_set<Symbol> funVisited_;
 
         t86::Program p_;
-        il::Program const &ilp_;
+        const il::Program &ilp_;
     };
 
 }
