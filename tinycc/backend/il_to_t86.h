@@ -46,8 +46,15 @@ namespace tiny {
         void generate(il::Program const &program) {
             Symbol main = Symbol{"main"};
             enterFunction(main);
-            bbWorklist_.emplace(program.getFunction(main)->start());
+            addBBToWorklist(program.getFunction(main)->start());
             generateBasicBlock();
+        }
+
+        void addBBToWorklist(il::BasicBlock *bb) {
+            if (bbVisited_.find(bb) == bbVisited_.end()) {
+                bbVisited_.insert(bb);
+                bbWorklist_.push(bb);
+            }
         }
 
         void generateCdeclPrologue(size_t stackSize) {
@@ -144,6 +151,7 @@ namespace tiny {
                             op1,
                             op2
                     );
+                    regMap_[instr] = op1;
                     break;
                 }
 
@@ -153,6 +161,14 @@ namespace tiny {
                             new RegOp(instr->dst),
                             new RegOp(instr->src)
                     );*/
+                    break;
+                }
+
+                case il::Opcode::LT: {
+                    (*this) += new t86::CMPIns(
+                            regMap_[instr->reg1],
+                            regMap_[instr->reg2]
+                    );
                     break;
                 }
                 case il::Opcode::ST: {
@@ -184,6 +200,7 @@ namespace tiny {
             switch (instr->opcode) {
                 case il::Opcode::JMP: {
                     (*this) += new t86::JMPIns(new LabelOp(bb_->name));
+                    addBBToWorklist(instr->target);
                     break;
                 }
                 default:
@@ -196,6 +213,32 @@ namespace tiny {
             switch (instr->opcode) {
                 case il::Opcode::RETR: {
 
+                    break;
+                }
+                default:
+                    ;
+                    //NOT_IMPLEMENTED;
+            }
+        }
+
+        t86::Instruction *selectJmp(il::Opcode op, const std::string &target) {
+            switch (op) {
+                case il::Opcode::LT: {
+                    return new t86::JGEIns(new LabelOp(target));
+                    break;
+                }
+                default:
+                    NOT_IMPLEMENTED;
+            }
+        }
+
+        void visit(il::Instruction::TerminatorRegBB* instr) override {
+            switch (instr->opcode) {
+                case il::Opcode::BR: {
+                    (*this) += selectJmp(instr->reg->opcode, instr->target2->name);
+                    //compile the true branch - that will be the fallthrough case
+                    addBBToWorklist(instr->target1);
+                    addBBToWorklist(instr->target2);
                     break;
                 }
                 default:
@@ -227,10 +270,11 @@ namespace tiny {
         AbstractRegAllocator regAllocator_;
         StackAllocator stackAllocator_;
 
-        t86::BasicBlock *bb_;
-        t86::Function *f_;
+        t86::BasicBlock *bb_ = nullptr;
+        t86::Function *f_ = nullptr;
 
         std::queue<il::BasicBlock *> bbWorklist_;
+        std::unordered_set<il::BasicBlock *> bbVisited_;
 
         t86::Program p_;
     };

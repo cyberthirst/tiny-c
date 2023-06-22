@@ -21,8 +21,11 @@ namespace tiny::t86 {
                 name{makeUniqueName()} {
         }
 
-        BasicBlock(std::string const & name):
+        /*BasicBlock(std::string const & name):
                 name{makeUniqueName(name)} {
+        }*/
+        BasicBlock(std::string const & name):
+                name{name} {
         }
 
         /*bool terminated() const {
@@ -61,6 +64,7 @@ namespace tiny::t86 {
                 p << i->toString();
             }
             p << DEDENT;
+            p << NEWLINE;
         }
 
 

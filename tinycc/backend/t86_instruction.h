@@ -10,40 +10,41 @@
 #include "common/colors.h"
 
 namespace tiny::t86 {
+    //opcodes from: https://github.com/Gregofi/t86-with-debug/blob/master/src/t86/instruction.h
+    enum class Opcode {
+        MOV,
+        LEA,
+        NOP,
+        HALT,
+        ADD,
+        SUB,
+        INC,
+        DEC,
+        MUL,
+        DIV,
+        MOD,
+        IMUL,
+        IDIV,
+        CMP,
+        JMP,
+        JZ,
+        JNZ,
+        JE,
+        JNE,
+        JG,
+        JGE,
+        JL,
+        JLE,
+        JA,
+        JAE,
+        CALL,
+        RET,
+        PUSH,
+        POP,
+    };
+
     class Instruction {
     public:
-        //opcodes from: https://github.com/Gregofi/t86-with-debug/blob/master/src/t86/instruction.h
-        enum class Opcode {
-            MOV,
-            LEA,
-            NOP,
-            HALT,
-            ADD,
-            SUB,
-            INC,
-            DEC,
-            MUL,
-            DIV,
-            MOD,
-            IMUL,
-            IDIV,
-            CMP,
-            JMP,
-            JZ,
-            JNZ,
-            JE,
-            JNE,
-            JG,
-            JGE,
-            JL,
-            JLE,
-            JA,
-            JAE,
-            CALL,
-            RET,
-            PUSH,
-            POP,
-        };
         virtual ~Instruction() = default;
         virtual std::string toString() const = 0;
     };
