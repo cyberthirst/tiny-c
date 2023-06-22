@@ -76,6 +76,15 @@ namespace tiny::t86 {
         const LabelOp *lbl_;
     };
 
+    class CALLIns : public Instruction {
+    public:
+        CALLIns(const LabelOp *lbl)
+                : lbl_(lbl) {}
+        const LabelOp *lbl_;
+        std::string toString() const override {
+            return "CALL " + lbl_->toString();
+        }
+    };
 
     #define UNARY_INSTRUCTION(name) \
     class name##Ins : public UnaryIns { \

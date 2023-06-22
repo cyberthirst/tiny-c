@@ -22,7 +22,7 @@ namespace tiny {
     class T86CodeGen : public il::IRVisitor {
     public:
         static t86::Program translateProgram(il::Program const &program) {
-            T86CodeGen gen;
+            T86CodeGen gen(program);
             gen.generate(program);
             //TODO generate HALT instruction
             return std::move(gen.p_);
@@ -34,6 +34,8 @@ namespace tiny {
             lastResult_ = ins;
             return *this;
         }
+
+        T86CodeGen(il::Program const &program) : ilp_{program} {}
     private:
         t86::Instruction* translate(il::Instruction *child) {
             // need to check if child is not null before dereferencing
@@ -46,14 +48,36 @@ namespace tiny {
         void generate(il::Program const &program) {
             Symbol main = Symbol{"main"};
             enterFunction(main);
+            addFunToWorklist(main);
             addBBToWorklist(program.getFunction(main)->start());
-            generateBasicBlock();
+            while (!funWorklist_.empty()) {
+                const il::Function *fun = funWorklist_.front();
+                funWorklist_.pop();
+                enterFunction(fun->);
+                while (!bbWorklist_.empty()) {
+                    il::BasicBlock *bb = bbWorklist_.front();
+                    bb_ = f_->addBasicBlock(bb->name);
+                    bbWorklist_.pop();
+                    for (auto const &instr: bb->getInstructions()) {
+                        translate(instr.get());
+                    }
+                    std::cout << colors::ColorPrinter::colorize(p_);
+                }
+            }
         }
 
         void addBBToWorklist(il::BasicBlock *bb) {
             if (bbVisited_.find(bb) == bbVisited_.end()) {
                 bbVisited_.insert(bb);
                 bbWorklist_.push(bb);
+            }
+        }
+
+        void addFunToWorklist(Symbol sym) {
+            const il::Function *fun = ilp_.getFunction(sym);
+            if (funVisited_.find(fun) == funVisited_.end()) {
+                funVisited_.insert(fun);
+                funWorklist_.push(fun);
             }
         }
 
@@ -246,23 +270,33 @@ namespace tiny {
                     //NOT_IMPLEMENTED;
             }
         }
-        /*
-        // Visitor for function call.
-        void visit(Instruction::RegRegs* instr) override {
+
+        void visit(il::Instruction::RegRegs* instr) override {
             switch (instr->opcode) {
-                case Opcode::CALL:
-                    // Translation of IR's CALL to x86's CALL instruction.
-                    // This assumes that instr->funName is the name of the function to call.
-                    *this += std::make_unique<t86::CALLIns>(
-                            new LabelOp(instr->funName)
+                case il::Opcode::CALL:
+                    //1. push all the arguments to the stack in reverse order
+                    for (auto it = instr->regs.rbegin(); it != instr->regs.rend(); ++it) {
+                        (*this) += new t86::PUSHIns(regMap_[*it]);
+                    }
+                    //2. call the function
+                    (*this) += new t86::CALLIns(
+                            new LabelOp(instr->reg->name)
                     );
+                    //3. clean up the stack b
+                    //TODO we assume constant size of the arguments
+                    //this wouldn't work for structs, probably chars etc..
+                    (*this) += new t86::ADDIns(
+                            new RegOp(regAllocator_.getSP()),
+                            new ImmOp(instr->regs.size() * 8)
+                    );
+
                     break;
 
                     // Add more cases as needed...
                 default:
                     NOT_IMPLEMENTED;
             }
-        }*/
+        }
 
         //maps original IR instructions to the corresponding registers
         std::unordered_map<il::Instruction*, RegOp *> regMap_;
@@ -276,7 +310,11 @@ namespace tiny {
         std::queue<il::BasicBlock *> bbWorklist_;
         std::unordered_set<il::BasicBlock *> bbVisited_;
 
+        std::queue<const il::Function *> funWorklist_;
+        std::unordered_set<const il::Function *> funVisited_;
+
         t86::Program p_;
+        il::Program const &ilp_;
     };
 
 }
