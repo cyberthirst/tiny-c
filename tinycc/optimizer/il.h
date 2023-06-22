@@ -743,8 +743,10 @@ namespace tiny::il {
         }
 
         size_t getStackSize(const bool stupid) const {
-            if (stupid)
-                return totalLocalsSize_;
+            if (stupid) {
+                //TODO args might have different size than 8 bytes, but for simplicity we assume they are 8 bytes
+                return totalLocalsSize_ + 8 * args_.size();
+            }
             else
                 return localsMaxSize_;
         }

@@ -59,7 +59,7 @@ namespace tiny {
                     bb_ = f_->addBasicBlock(bb->name);
                     bbWorklist_.pop();
                     if (generatePrologue) {
-                        generateCdeclPrologue(program.getFunction(sfun));
+                        generateCdeclPrologue();
                         generatePrologue = false;
                     }
                     for (auto const &instr: bb->getInstructions()) {
@@ -85,20 +85,20 @@ namespace tiny {
             }
         }
 
-        void generateCdeclPrologue(const il::Function *fun) {
+        void generateCdeclPrologue() {
             // 1. save base pointer
             (*this) += new t86::PUSHIns(new RegOp(regAllocator_.getBP()));
             // 2. set base pointer to stack pointer
             (*this) += new t86::MOVIns(new RegOp(regAllocator_.getBP()),
                                                      new RegOp(regAllocator_.getSP()));
             // 3. allocate stack space for local variables
-            int stackSize = fun->getStackSize(true);
+            int stackSize = ilf_->getStackSize(true);
             (*this) += new t86::SUBIns(new RegOp(regAllocator_.getSP()),
                                                      new ImmOp(stackSize));
             //take the current function
             //and move the arguments from the stack to registers
-            for (size_t i = 0; i < fun->numArgs(); ++i) {
-                auto *instr = dynamic_cast<il::Instruction::ImmI*>(const_cast<il::Instruction *>(fun->getArg(i)));
+            for (size_t i = 0; i < ilf_->numArgs(); ++i) {
+                auto *instr = dynamic_cast<il::Instruction::ImmI*>(const_cast<il::Instruction *>(ilf_->getArg(i)));
                 //we allocate new register for the argument
                 //we then move the argument from the stack to the register
                 //we add 8 because we have to skip the return address
@@ -109,6 +109,10 @@ namespace tiny {
         }
 
         void generateCdeclEpilogue() {
+            // cleanup the local variables
+            int stackSize = ilf_->getStackSize(true);
+            (*this) += new t86::ADDIns(new RegOp(regAllocator_.getSP()),
+                                                     new ImmOp(stackSize));
             // 1. restore base pointer
             (*this) += new t86::POPIns(new RegOp(regAllocator_.getBP()));
             // 2. return
@@ -117,8 +121,9 @@ namespace tiny {
         }
 
         t86::Function * enterFunction(Symbol name) {
-            ASSERT(f_ == nullptr);
+            assert(f_ == nullptr && ilf_ == nullptr && "Cannot enter a function while another function is being translated");
             f_ = p_.addFunction(name);
+            ilf_ = ilp_.getFunction(name);
             addBBToWorklist(ilp_.getFunction(name)->start());
             //generateCdeclPrologue(ilp_.getFunction(name));
             return f_;
@@ -127,6 +132,7 @@ namespace tiny {
         void leaveFunction() {
             assert(bbWorklist_.empty() && "Not all basic blocks of a function were translated");
             f_ = nullptr;
+            ilf_ = nullptr;
             bb_ = nullptr;
         }
 
@@ -244,6 +250,7 @@ namespace tiny {
         void visit(il::Instruction::Terminator* instr) override {
             switch (instr->opcode) {
                 case il::Opcode::RET: {
+                    generateCdeclEpilogue();
                     break;
                 }
                 default:
@@ -268,7 +275,9 @@ namespace tiny {
         void visit(il::Instruction::TerminatorReg* instr) override {
             switch (instr->opcode) {
                 case il::Opcode::RETR: {
-
+                    //we move the return value to the eax register
+                    addMOV(instr, new RegOp(regAllocator_.getEAX()), regMap_[instr->reg]);
+                    generateCdeclEpilogue();
                     break;
                 }
                 default:
@@ -324,6 +333,8 @@ namespace tiny {
                     il::Instruction::ImmS *sfun = dynamic_cast<il::Instruction::ImmS *>(instr->reg);
                     assert(sfun && "Currently we only support calls via symbols");
                     addFunToWorklist(Symbol{sfun->value});
+                    //associate the call instruction with the result register
+                    regMap_[instr] = new RegOp{regAllocator_.getEAX()};
                     break;
                 }
                 default:
@@ -339,6 +350,7 @@ namespace tiny {
 
         t86::BasicBlock *bb_ = nullptr;
         t86::Function *f_ = nullptr;
+        const il::Function *ilf_ = nullptr;
 
         std::queue<il::BasicBlock *> bbWorklist_;
         std::unordered_set<il::BasicBlock *> bbVisited_;

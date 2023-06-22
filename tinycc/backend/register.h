@@ -45,18 +45,19 @@ namespace tiny {
     public:
         RegAllocator()
                 : SP(Reg::Type::SP, INT_MAX),
-                  BP(Reg::Type::BP, INT_MAX - 1) {
-        }
+                  BP(Reg::Type::BP, INT_MAX - 1),
+                  EAX(Reg::Type::GP, 0){ }
 
         virtual Reg allocate() = 0;  // Pure virtual function
 
         const Reg &getSP() const { return SP; }
-
         const Reg &getBP() const { return BP; }
+        const Reg &getEAX() const { return EAX; }
 
     protected:
         Reg SP;  // Stack Pointer register
         Reg BP;  // Base Pointer register
+        Reg EAX; // Return value register
     };
 
 
@@ -69,7 +70,8 @@ namespace tiny {
     public:
         AbstractRegAllocator()
                 : RegAllocator() {
-            nextRegIndex_ = 0; // General Purpose registers start from 0
+            //we reserve the REG0 as EAX for return values
+            nextRegIndex_ = 1; // General Purpose registers start from 1
         }
 
         Reg allocate() override {
