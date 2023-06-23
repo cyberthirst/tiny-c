@@ -80,6 +80,7 @@ std::string runVM(const t86::Program & program) {
 
 bool testASMProgram(t86::Program const & p, Test const * test) {
     std::string result = runVM(p);
+    std::cout << "vm result: " << result << std::endl;
     if (stoi(result) != test->result) {
         std::cerr << "ERROR: expected " << test->result << ", got " << result << color::reset << std::endl;
         return false;

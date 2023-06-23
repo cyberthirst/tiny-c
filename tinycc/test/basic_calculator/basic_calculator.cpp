@@ -21,8 +21,16 @@ std::vector<Test> basic_calculator_tests = {
         return a; \
      } \
     int main() { \
-         return add_n(0, 5); \
-     }", 5),
+         return add_n(0, 20); \
+     }", 20, true),
+    TEST("\
+    int main() { \
+        int n = 0;\
+        while (n < 10) {\
+            n = n + 1;\
+        }\
+         return n; \
+     }", 10),
     TEST("\
     int main() { \
         return 1 + 10; \
@@ -37,6 +45,18 @@ std::vector<Test> basic_calculator_tests = {
         int b = 5;\
         return a * b; \
      }", 25),
+    TEST("\
+    int main() { \
+        int a = 5;\
+        int b = 5;\
+        return a + b; \
+     }", 10),
+    TEST("\
+    int main() { \
+        int a = 5;\
+        int b = 5 + 5 - 2;\
+        return a * b; \
+     }", 40),
     TEST("\
     int main() { \
         int a = 5;\
