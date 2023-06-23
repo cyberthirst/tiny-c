@@ -24,10 +24,7 @@ namespace tiny::t86 {
         /*BasicBlock(std::string const & name):
                 name{makeUniqueName(name)} {
         }*/
-        BasicBlock(std::string const & name):
-                name{name} {
-        }
-
+        BasicBlock(std::string const & name): name{name} {}
         /*bool terminated() const {
             if (insns_.empty())
                 return false;
@@ -143,6 +140,8 @@ namespace tiny::t86 {
             return f;
         }
 
+        std::unordered_map<Symbol, Function *> &getFunctions() { return functions_; }
+
         std::string toString() const {
             std::stringstream ss;
             ss << emitStart();
@@ -159,13 +158,13 @@ namespace tiny::t86 {
             ss << ".text" << "\n";
             ss << "#.global main" << "\n";
             //calls main, outputs the result and halts
+            //TODO make this code, not just a string
             ss << "CALL 3\nPUTNUM R0\nHALT\n";
             return ss.str();
         }
 
 
     private:
-        //std::vector<std::unique_ptr<Instruction>> instructions_;
         std::unordered_map<Symbol, Function *> functions_;
     };
 }

@@ -68,13 +68,22 @@ namespace tiny {
 
     class LabelOp : public Operand {
     public:
-        LabelOp(std::string label) : label_(std::move(label)) {}
+        LabelOp(std::string label) : label_(std::move(label)), address_(-1) {}
+
+        void patch(int address) {
+            address_ = address;
+        }
 
         std::string toString() const override {
+            if (address_ >= 0) { // check if the address has been patched.
+                return std::to_string(address_);
+            }
             return label_;
         }
 
     private:
         std::string label_;
+        int address_;
     };
+
 }

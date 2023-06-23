@@ -224,6 +224,8 @@ namespace tiny {
 
                 ARITHMETIC_INS(ADD, ADD)
                 ARITHMETIC_INS(SUB, SUB)
+                ARITHMETIC_INS(MUL, MUL)
+                ARITHMETIC_INS(DIV, DIV)
 
                 case il::Opcode::LT: {
                     (*this) += new t86::CMPIns(

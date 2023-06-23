@@ -69,18 +69,30 @@ namespace tiny::t86 {
     class NoOpIns : public Instruction {
     };
 
-    class JumpIns : public Instruction {
+    class LblIns : public Instruction {
     public:
-        JumpIns(const LabelOp *lbl)
+        LblIns(LabelOp *lbl)
                 : lbl_(lbl) {}
-        const LabelOp *lbl_;
+
+        void patchLabel(int address) {
+            lbl_->patch(address);
+        }
+
+        LabelOp *lbl_;
     };
 
-    class CALLIns : public Instruction {
+    class JumpIns : public LblIns {
     public:
-        CALLIns(const LabelOp *lbl)
-                : lbl_(lbl) {}
-        const LabelOp *lbl_;
+        JumpIns(LabelOp *lbl)
+                : LblIns(lbl) {}
+
+    };
+
+    class CALLIns : public LblIns {
+    public:
+        CALLIns(LabelOp *lbl)
+                : LblIns(lbl) {}
+
         std::string toString() const override {
             return "CALL " + lbl_->toString();
         }
@@ -117,7 +129,7 @@ namespace tiny::t86 {
     #define JMP_INSTRUCTION(name) \
     class name##Ins : public JumpIns { \
     public: \
-    name##Ins(const LabelOp *lbl) \
+    name##Ins(LabelOp *lbl) \
         : JumpIns(lbl) {} \
     std::string toString() const override { \
         return #name " " + lbl_->toString(); \
@@ -131,6 +143,8 @@ namespace tiny::t86 {
     BINARY_INSTRUCTION(CMP);
     BINARY_INSTRUCTION(SUB);
     BINARY_INSTRUCTION(ADD);
+    BINARY_INSTRUCTION(MUL);
+    BINARY_INSTRUCTION(DIV);
 
     NOOP_INSTRUCTION(RET);
     NOOP_INSTRUCTION(HALT);
