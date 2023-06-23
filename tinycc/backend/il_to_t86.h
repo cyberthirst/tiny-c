@@ -262,7 +262,7 @@ namespace tiny {
         void visit(il::Instruction::TerminatorB* instr) override {
             switch (instr->opcode) {
                 case il::Opcode::JMP: {
-                    (*this) += new t86::JMPIns(new LabelOp(bb_->name));
+                    (*this) += new t86::JMPIns(new LabelOp(instr->target->name));
                     addBBToWorklist(instr->target);
                     break;
                 }
