@@ -12,6 +12,7 @@
 #include "common/colors.h"
 #include "common/symbol.h"
 #include "stack.h"
+#include "constants.h"
 
 namespace tiny {
     /*
@@ -66,7 +67,7 @@ namespace tiny {
                         translate(instr.get());
                     }
                 }
-                std::cout << colors::ColorPrinter::colorize(p_);
+                std::cout << p_.toString();
                 leaveFunction();
             }
         }
@@ -101,10 +102,9 @@ namespace tiny {
                 auto *instr = dynamic_cast<il::Instruction::ImmI*>(const_cast<il::Instruction *>(ilf_->getArg(i)));
                 //we allocate new register for the argument
                 //we then move the argument from the stack to the register
-                //we add 8 because we have to skip the return address
-                //we multiply by 8 because the size of our values is currently 8
+                //we add REG_TO_MEM_WORD because we have to skip the return address
                 addMOV(instr, new RegOp(regAllocator_.allocate()),
-                       new MemRegOffsetOp(regAllocator_.getBP(), 8 + instr->value * 8));
+                       new MemRegOffsetOp(regAllocator_.getBP(), REG_TO_MEM_WORD + instr->value));
             }
         }
 
@@ -172,10 +172,9 @@ namespace tiny {
                     il::Instruction::ImmI *i = dynamic_cast<il::Instruction::ImmI*>(instr);
                     //we allocate new register for the argument
                     //we then move the argument from the stack to the register
-                    //we add 8 because we have to skip the return address
-                    //we multiply by 8 because the size of our values is currently 8
+                    //we add REG_TO_MEM_WORD because we have to skip the return address
                     addMOV(instr, new RegOp(regAllocator_.allocate()),
-                                      new MemRegOffsetOp(regAllocator_.getBP(), 8 + i->value * 8));
+                                      new MemRegOffsetOp(regAllocator_.getBP(), REG_TO_MEM_WORD + i->value));
 
                     break;
                 }
@@ -328,7 +327,7 @@ namespace tiny {
                     //this wouldn't work for structs, probably chars etc..
                     (*this) += new t86::ADDIns(
                             new RegOp(regAllocator_.getSP()),
-                            new ImmOp(instr->regs.size() * 8)
+                            new ImmOp(instr->regs.size())
                     );
                     il::Instruction::ImmS *sfun = dynamic_cast<il::Instruction::ImmS *>(instr->reg);
                     assert(sfun && "Currently we only support calls via symbols");

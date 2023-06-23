@@ -8,6 +8,9 @@
 #include "optimizer/il.h"
 
 namespace tiny {
+// when we allocate a variable on the stack, we need to skip the BP
+// which starts the stack frame - so the first variable can be at [BP-1]
+#define SKIP_BP_OFFSET 1
 /*
  * A stack allocator that allocates variables on the stack.
  * It is used to allocate local variables in functions, keeps
@@ -22,11 +25,20 @@ namespace tiny {
     class StackAllocator {
     public:
         //
-        StackAllocator() : offset_(8) {}
+        StackAllocator() : offset_(SKIP_BP_OFFSET) {}
+
+        size_t normalize(size_t size) {
+            if (size <= 8)
+                return 1;
+            else {
+                //we can't handle variables larger than 8 bytes
+                NOT_IMPLEMENTED;
+            }
+        }
 
         int allocate(il::Instruction const *var, size_t size) {
             offsets_.emplace(var, offset_);
-            offset_ += size;
+            offset_ += normalize(size);
             return -offsets_.at(var);
         }
 
@@ -35,7 +47,7 @@ namespace tiny {
         }
 
         int getStackSize() const {
-            return offset_ - 8;
+            return offset_ - SKIP_BP_OFFSET;
         }
 
     private:
