@@ -3,6 +3,7 @@
 #include <iostream>
 #include <sstream>
 #include <map>
+#include <array>
 
 #include "common/options.h"
 #include "common/colors.h"
@@ -12,6 +13,7 @@
 #include "optimizer/il_interpreter.h"
 #include "backend/il_to_t86.h"
 #include "optimizer/optimizer.h"
+#include "backend/assembler.h"
 
 //tests
 #include "test/arithmetic/arithmetic_tests.h"
@@ -46,6 +48,45 @@ bool testIRProgram(il::Program const & p, Test const * test) {
     return true;
 }
 
+std::string runVM(const t86::Program & program) {
+    // Save assembly code to a temporary file
+    std::string tmpFilename = "/tmp/tmpAsmCode.in";
+    std::ofstream tmpFile(tmpFilename);
+    if (!tmpFile) {
+        throw std::runtime_error("Could not open temp file for writing assembly code.");
+    }
+    tmpFile << program.toString() << std::endl;
+    tmpFile.close();
+
+    std::string command = "t86-cli --register-cnt=100 " + tmpFilename;
+    std::array<char, 128> buffer{};
+    std::string result;
+
+    std::unique_ptr<FILE, decltype(&pclose)> pipe(popen(command.c_str(), "r"), pclose);
+    if (!pipe) {
+        throw std::runtime_error("popen() failed!");
+    }
+    while (fgets(buffer.data(), buffer.size(), pipe.get()) != nullptr) {
+        result += buffer.data();
+    }
+
+    // remove temporary file
+    if (std::remove(tmpFilename.c_str()) != 0) {
+        throw std::runtime_error("Error deleting temporary file.");
+    }
+
+    return result;
+}
+
+bool testASMProgram(t86::Program const & p, Test const * test) {
+    std::string result = runVM(p);
+    if (stoi(result) != test->result) {
+        std::cerr << "ERROR: expected " << test->result << ", got " << result << color::reset << std::endl;
+        return false;
+    }
+    return true;
+}
+
 bool compile(std::string const & contents, Test const * test, TestResult *result) {
     try {
         // parse
@@ -66,8 +107,12 @@ bool compile(std::string const & contents, Test const * test, TestResult *result
         if (!testIRProgram(p, test))
             return false;
         // translate to target
-        t86::Program t86 = T86CodeGen::translateProgram(p);
-        // run on t86, or output and verify?
+        t86::Program t86Program = T86CodeGen::translateProgram(p);
+        Assembler::assemble(t86Program);
+        if (test && test->testResult && Options::testASM) {
+            if (!testASMProgram(t86Program, test))
+                return false;
+        }
         return (test == nullptr) || ! (test->shouldError);
     } catch (SourceError const & e) {
         if ((test != nullptr) && test->shouldError == e.kind())

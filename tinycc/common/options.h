@@ -14,6 +14,7 @@ namespace tiny {
         static inline bool rawAST = false;
         static inline bool exitAfterFailure = false;
         static inline bool testIR = true;
+        static inline bool testASM = true;
 
         static void setVerbose() {
             verboseAST = true;
