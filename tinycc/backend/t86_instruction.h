@@ -77,7 +77,6 @@ namespace tiny::t86 {
         void patchLabel(int address) {
             lbl_->patch(address);
         }
-
         LabelOp *lbl_;
     };
 

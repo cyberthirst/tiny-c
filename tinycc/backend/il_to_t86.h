@@ -67,7 +67,7 @@ namespace tiny {
                         translate(instr.get());
                     }
                 }
-                std::cout << p_.toString();
+                //std::cout << p_.toString();
                 leaveFunction();
             }
         }
@@ -96,15 +96,23 @@ namespace tiny {
             int stackSize = ilf_->getStackSize(true);
             (*this) += new t86::SUBIns(new RegOp(regAllocator_.getSP()),
                                                      new ImmOp(stackSize));
-            //take the current function
-            //and move the arguments from the stack to registers
+            //currently we have a primitive way of handling function arguments
+            // - the caller pushes the arguments on the stack
+            // - the calle then MOVs the arguments from the stack to the function's stack frame
+            // - the callee then uses the arguments from the stack frame
+            // - additionally we assume that all the arguments have fixed size
+            // - this is all done as part of the function prologue
             for (size_t i = 0; i < ilf_->numArgs(); ++i) {
                 auto *instr = dynamic_cast<il::Instruction::ImmI*>(const_cast<il::Instruction *>(ilf_->getArg(i)));
                 //we allocate new register for the argument
                 //we then move the argument from the stack to the register
                 //we add REG_TO_MEM_WORD because we have to skip the return address
+                //we add 1 because the arguments are numbered from 0 - so the first argument is at:
+                //  ARG0     <- BP + 2
+                //  RET ADDR <- BP + 1
+                //  OLD BP   <- BP, SP
                 addMOV(instr, new RegOp(regAllocator_.allocate()),
-                       new MemRegOffsetOp(regAllocator_.getBP(), REG_TO_MEM_WORD + instr->value));
+                       new MemRegOffsetOp(regAllocator_.getBP(), REG_TO_MEM_WORD + instr->value + 1));
             }
         }
 
@@ -162,20 +170,13 @@ namespace tiny {
                     //assert(stackAllocator_.getStackSize() <= f_->getStackSize(true));
                     break;
                 }
-                //currently we have a primitive way of handling function arguments
-                // - the caller pushes the arguments on the stack
-                // - the calle then MOVs the arguments from the stack to the function's stack frame
-                // - the callee then uses the arguments from the stack frame
-                // - additionally we assume that all the arguments have fixed size
-                // - this is all done as part of the function prologue
-                case il::Opcode::ARG: {
-                    il::Instruction::ImmI *i = dynamic_cast<il::Instruction::ImmI*>(instr);
-                    //we allocate new register for the argument
-                    //we then move the argument from the stack to the register
-                    //we add REG_TO_MEM_WORD because we have to skip the return address
-                    addMOV(instr, new RegOp(regAllocator_.allocate()),
-                                      new MemRegOffsetOp(regAllocator_.getBP(), REG_TO_MEM_WORD + i->value));
 
+                case il::Opcode::ARG: {
+                    /*il::Instruction::ImmI *i = dynamic_cast<il::Instruction::ImmI*>(instr);
+                    addMOV(instr, new RegOp(regAllocator_.allocate()),*
+                                      new MemRegOffsetOp(regAllocator_.getBP(), REG_TO_MEM_WORD + i->value + 1));*/
+                    //handled directly in the prologue
+                    NOT_IMPLEMENTED;
                     break;
                 }
 
@@ -321,8 +322,10 @@ namespace tiny {
                         (*this) += new t86::PUSHIns(regMap_[*it]);
                     }
                     //2. call the function
+                    il::Instruction::ImmS *sfun = dynamic_cast<il::Instruction::ImmS *>(instr->reg);
+                    assert(sfun && "Currently we only support calls via symbols");
                     (*this) += new t86::CALLIns(
-                            new LabelOp(instr->reg->name)
+                            new LabelOp(sfun->value.name())
                     );
                     //3. clean up the stack b
                     //TODO we assume constant size of the arguments
@@ -331,8 +334,6 @@ namespace tiny {
                             new RegOp(regAllocator_.getSP()),
                             new ImmOp(instr->regs.size())
                     );
-                    il::Instruction::ImmS *sfun = dynamic_cast<il::Instruction::ImmS *>(instr->reg);
-                    assert(sfun && "Currently we only support calls via symbols");
                     addFunToWorklist(Symbol{sfun->value});
                     //associate the call instruction with the result register
                     regMap_[instr] = new RegOp{regAllocator_.getEAX()};

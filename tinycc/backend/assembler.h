@@ -9,6 +9,7 @@
 #include "program_structures.h"
 #include "constants.h"
 
+
 namespace tiny {
     class Assembler {
     public:
@@ -17,9 +18,12 @@ namespace tiny {
             a.assembleProgram(program);
         }
     private:
+        //3 is the size of the start function in instructions
+        //TODO very fragile, we should calculate this, however currently the start function
+        //is implemented as a simple string and thus it is hard to calculate
+        Assembler() : sizeOfProgram(3) {}
         //calculates the addresses of the functions and basic blocks
         void firstPass(t86::Program &program) {
-            sizeOfProgram = 0;
             //TODO here we assume that the first iterated function is main, which is
             //currently true, but is fragile and might change in the future
             for(auto& [funName, function] : program.getFunctions()) {
@@ -42,14 +46,16 @@ namespace tiny {
                         //opcodes aren't currently implemented
                         auto *jumpIns = dynamic_cast<t86::JumpIns *>(ins);
                         if (jumpIns) {
-                            int address = labelAddressMap[jumpIns->lbl_->toString()];
+                            //int address = labelAddressMap[jumpIns->lbl_->toString()];
+                            int address = labelAddressMap.at(jumpIns->lbl_->toString());
                             jumpIns->patchLabel(address);
                         }
 
                         auto *callIns = dynamic_cast<t86::CALLIns *>(ins);
                         if (callIns) {
-                            int address = labelAddressMap[callIns->lbl_->toString()];
-                            jumpIns->patchLabel(address);
+                            //int address = labelAddressMap[callIns->lbl_->toString()];
+                            int address = labelAddressMap.at(callIns->lbl_->toString());
+                            callIns->patchLabel(address);
                         }
                     }
                 }
@@ -62,8 +68,7 @@ namespace tiny {
         }
 
         //size of the program in instructions
-        size_t sizeOfProgram = INS_START_FUN_SZ;
-
+        size_t sizeOfProgram = 3;
         std::map<std::string, size_t> labelAddressMap;
     };
 }

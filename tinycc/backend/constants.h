@@ -9,5 +9,3 @@
 //how many words are in a register - if we eg push a register to the stack
 //we want to know how many words it takes up
 #define REG_TO_MEM_WORD T86_REG_SZ / T86_WORD_SZ
-//size of the start function in instructions
-#define INS_START_FUN_SZ 3
