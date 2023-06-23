@@ -54,17 +54,16 @@ namespace tiny::t86 {
         friend class Function;
         friend class Program;
 
-        void print(colors::ColorPrinter & p) const {
-            using namespace colors;
-            p << "# bb: " << IDENT(name) << SYMBOL(":") << INDENT;
+        std::string toString() const {
+            std::stringstream s;
+            s << "# bb: " << name << ":";
             for (auto & i : insns_) {
-                p << NEWLINE;
+                s << "\n";
                 //TODO print the instruction
                 //i->print(p);
-                p << i->toString();
+                s << i->toString();
             }
-            p << DEDENT;
-            p << NEWLINE;
+            return s.str();
         }
 
 
@@ -114,20 +113,13 @@ namespace tiny::t86 {
 
         std::vector<std::unique_ptr<BasicBlock>>& getBasicBlocks() { return bbs_; }
 
-        void print(colors::ColorPrinter & p) const {
-            using namespace colors;
+        std::string toString() const {
+            std::stringstream s;
             //TODO print args
-            /*if (! args_.empty()) {
-                p << NEWLINE << COMMENT("; arguments ") << INDENT;
-                for (auto & arg : args_) {
-                    p << NEWLINE;
-                    //arg->print(p);
-                }
-                p << DEDENT;
-            }*/
             for (auto & bb : bbs_) {
-                bb->print(p);
+                s << bb->toString();
             }
+            return s.str();
         }
 
         BasicBlock * start() const { return bbs_[0].get(); }
@@ -140,28 +132,8 @@ namespace tiny::t86 {
     class Program {
     public:
         Program() = default;
-        Program(const Program&) = delete;
-        Program(Program&&) = default;
-        Program& operator=(const Program&) = delete;
-        Program& operator=(Program&&) = default;
         ~Program() = default;
 
-        /*void addInstruction(std::unique_ptr<Instruction> instruction) {
-            instructions_.push_back(std::move(instruction));
-        }
-
-        std::vector<std::unique_ptr<Instruction>>& instructions() {
-            return instructions_;
-        }
-
-
-        const std::vector<std::unique_ptr<Instruction>>& instructions() const {
-            return instructions_;
-        }
-
-        size_t size() const {
-            return instructions_.size();
-        }*/
         Function * addFunction(Symbol name){
             if (functions_.find(name) != functions_.end()) {
                 throw std::runtime_error(STR("function " << name << " already exists"));
@@ -171,14 +143,24 @@ namespace tiny::t86 {
             return f;
         }
 
-        void print(colors::ColorPrinter & p) const {
-            using namespace colors;
-            p << ".text" << NEWLINE;
+        std::string toString() const {
+            std::stringstream ss;
+            ss << emitStart();
             for (auto &f : functions_) {
-                p << "# " << f.first << NEWLINE;
-                f.second->print(p);
+                ss << "# " << f.first << "\n";
+                ss << f.second->toString();
             }
-            p << NEWLINE;
+            ss << '\n';
+            return ss.str();
+        }
+
+        std::string emitStart() const {
+            std::stringstream ss;
+            ss << ".text" << "\n";
+            ss << "#.global main" << "\n";
+            //calls main, outputs the result and halts
+            ss << "CALL 3\nPUTNUM R0\nHALT\n";
+            return ss.str();
         }
 
 

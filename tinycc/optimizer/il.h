@@ -6,6 +6,7 @@
 
 #include "common/colors.h"
 #include "frontend/ast.h"
+#include "backend/constants.h"
 
 namespace tiny::il {
 
@@ -735,6 +736,7 @@ namespace tiny::il {
         // gets called when we allocate space for a local variable, size is the size of the variable in bytes
         // when we leave a block, then call this function with negative size
         void updateLocalsSize(int size) {
+            assert((size == 0 || size == 8 || size < 0) && "currently we only support 8 byte variables");
             localsSize_ += size;
             if (localsSize_ > localsMaxSize_)
                 localsMaxSize_ = localsSize_;
@@ -744,8 +746,9 @@ namespace tiny::il {
 
         size_t getStackSize(const bool stupid) const {
             if (stupid) {
-                //TODO args might have different size than 8 bytes, but for simplicity we assume they are 8 bytes
-                return totalLocalsSize_ + 8 * args_.size();
+                //TODO args might have different size than 1 word, but for simplicity we currently assume they can't
+                assert(totalLocalsSize_ % 8 == 0 && "currently we only support 8 byte variables");
+                return totalLocalsSize_ / T86_WORD_SZ;
             }
             else
                 return localsMaxSize_;
