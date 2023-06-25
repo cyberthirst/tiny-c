@@ -7,11 +7,9 @@
 #include <memory>
 
 #include "operand.h"
-#include "common/colors.h"
-#include "t86_instruction.h"
-
 
 namespace tiny::t86 {
+
     class BasicBlock {
     public:
 

@@ -7,7 +7,7 @@
 #include <string>
 #include "register.h"
 
-namespace tiny {
+namespace tiny::t86 {
 
     class Operand {
     public:

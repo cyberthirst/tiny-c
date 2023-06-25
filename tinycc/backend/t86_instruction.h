@@ -7,7 +7,6 @@
 #include <memory>
 
 #include "operand.h"
-#include "common/colors.h"
 
 namespace tiny::t86 {
     //opcodes from: https://github.com/Gregofi/t86-with-debug/blob/master/src/t86/instruction.h
@@ -48,8 +47,6 @@ namespace tiny::t86 {
         virtual ~Instruction() = default;
         virtual std::string toString() const = 0;
     };
-
-
 
     class UnaryIns : public Instruction {
     public:
