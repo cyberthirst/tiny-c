@@ -40,9 +40,8 @@ namespace tiny::t86 {
 
         Instruction * operator[](size_t i) const { return insns_[i].get(); }
 
-        const std::vector<std::unique_ptr<Instruction>>& getInstructions() const {
-            return insns_;
-        }
+        const std::vector<std::unique_ptr<Instruction>>& getInstructions() const { return insns_; }
+        std::vector<std::unique_ptr<Instruction>>& getInstructions() { return insns_; }
 
     private:
 

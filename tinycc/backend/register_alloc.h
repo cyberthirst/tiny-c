@@ -10,6 +10,7 @@
 #include "program_structures.h"
 
 namespace tiny::t86 {
+    using DefUseChain = std::unordered_map<Operand *, std::vector<std::pair<Instruction *, size_t>>>;
 
     class RegAllocator {
     public:
@@ -91,7 +92,7 @@ namespace tiny::t86 {
     public:
         RndRegAllocator(Program &program, size_t numFreeRegs) : p_(program) {
             for (size_t i = 1; i <= numFreeRegs; ++i) {
-                freeRegs.insert(i);
+                freeRegs_.insert(i);
             }
         }
     private:
@@ -99,41 +100,69 @@ namespace tiny::t86 {
             for (auto& [funName, function] : p_.getFunctions()) {
                 auto &basicBlocks = function->getBasicBlocks();
                 for (auto &bb: basicBlocks) {
+                    computeDefUseChain(bb.get());
                     allocate(bb.get());
+                    defUseChain_.clear();
+                }
+            }
+        }
+
+
+        void computeDefUseChain(BasicBlock* block) {
+            const auto& instructions = block->getInstructions();
+
+            // For each instruction
+            for (size_t i = 0; i < instructions.size(); ++i) {
+                const auto& instruction = instructions[i];
+
+                // For each operand in the instruction
+                for (const auto& operand : instruction->getOperands()) {
+                    // Add the current instruction and its index to the def-use chain of the operand
+                    defUseChain_[operand].push_back(std::make_pair(instruction.get(), i));
                 }
             }
         }
 
         Reg allocate() override {
             // If there are no free registers, spill one randomly
-            if (freeRegs.empty()) {
+            if (freeRegs_.empty()) {
                 spillRegister();
             }
 
-            size_t regId = *freeRegs.begin();
-            freeRegs.erase(freeRegs.begin());
+            size_t regId = *freeRegs_.begin();
+            freeRegs_.erase(freeRegs_.begin());
             return Reg(Reg::Type::GP, regId);
         }
 
+
         void allocate(BasicBlock *b) {
-            std::unordered_map<Operand*, Reg> operandToRegMap;
+            std::unordered_map<Operand*, Reg> operandToRegMap;  // Map of operands to registers
+            std::unordered_set<Operand*> memoryOperands;  // Set of operands in memory
 
-            for (auto& instructionPtr : b->getInstructions()) {
-                Instruction *i = instructionPtr.get();
+            for (auto it = b->getInstructions().begin(); it != b->getInstructions().end(); ++it) {
+                Instruction *i = it->get();
 
-                // Operands in memory
                 for (Operand* o : i->getOperands()) {
-                    if (o->isInMemory()) {
+                    if (memoryOperands.find(o) != memoryOperands.end()) {
                         Reg r = allocate();
                         operandToRegMap[o] = r;
-                        i->prependLoadInstruction(r, o);
+
+                        // Create MOV instruction
+                        auto moveInstr = std::make_unique<MOVIns>(r, o);
+
+                        // Insert MOV instruction into the basic block
+                        it = b->getInstructions().insert(it, std::move(moveInstr));
+
+                        // Since we inserted a new instruction, the iterator positions have changed.
+                        // We need to increment 'it' to point to the original instruction.
+                        ++it;
                     }
                 }
 
                 // If it is the last use of an operand, release the register
                 for (Operand* o : i->getOperands()) {
                     if (i->isLastUse(o)) {
-                        freeRegs.insert(operandToRegMap[o].getId());
+                        freeRegs_.insert(operandToRegMap[o].getId());
                         operandToRegMap.erase(o);
                     }
                 }
@@ -149,13 +178,14 @@ namespace tiny::t86 {
         }
 
         void spillRegister() {
-            size_t spillRegId = *(std::next(freeRegs.begin(), rand() % freeRegs.size()));
-            freeRegs.erase(spillRegId);
+            size_t spillRegId = *(std::next(freeRegs_.begin(), rand() % freeRegs_.size()));
+            freeRegs_.erase(spillRegId);
 
             // TODO: You should handle moving the contents of this spilled register to memory.
         }
 
-        std::set<size_t> freeRegs;
+        std::unordered_map<Operand *, std::vector<std::pair<Instruction *, unsigned long>>> defUseChain_;
+        std::set<size_t> freeRegs_;
         Program &p_;
     };
 }
