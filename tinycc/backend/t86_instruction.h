@@ -46,24 +46,40 @@ namespace tiny::t86 {
     public:
         virtual ~Instruction() = default;
         virtual std::string toString() const = 0;
+
+        virtual std::vector<Operand*> getOperands() = 0;
     };
 
     class UnaryIns : public Instruction {
     public:
-        UnaryIns(const Operand *operand)
+        UnaryIns(Operand *operand)
                 : operand_(operand) {}
-        const Operand *operand_;
+
+        Operand *operand_;
+
+        std::vector<Operand*> getOperands() override {
+            return {operand_};
+        }
     };
 
     class BinaryIns : public Instruction {
     public:
-        BinaryIns(const Operand *operand1, const Operand *operand2)
+        BinaryIns(Operand *operand1, Operand *operand2)
                 : operand1_(operand1), operand2_(operand2) {}
-        const Operand *operand1_;
-        const Operand *operand2_;
+
+        Operand *operand1_;
+        Operand *operand2_;
+
+        std::vector<Operand*> getOperands() override {
+            return {operand1_, operand2_};
+        }
     };
 
     class NoOpIns : public Instruction {
+    public:
+        std::vector<Operand*> getOperands() override {
+            return {};  // No operands
+        }
     };
 
     class LblIns : public Instruction {
@@ -75,6 +91,10 @@ namespace tiny::t86 {
             lbl_->patch(address);
         }
         LabelOp *lbl_;
+
+        std::vector<Operand*> getOperands() override {
+            return {lbl_};
+        }
     };
 
     class JumpIns : public LblIns {
@@ -97,7 +117,7 @@ namespace tiny::t86 {
     #define UNARY_INSTRUCTION(name) \
     class name##Ins : public UnaryIns { \
     public: \
-    name##Ins(const Operand *operand) \
+    name##Ins(Operand *operand) \
             : UnaryIns(operand) {} \
     std::string toString() const override { \
         return #name " " + operand_->toString(); \
@@ -107,7 +127,7 @@ namespace tiny::t86 {
     #define BINARY_INSTRUCTION(name) \
     class name##Ins : public BinaryIns { \
     public: \
-    name##Ins(const Operand *dest, const Operand *src) \
+    name##Ins(Operand *dest, Operand *src) \
             : BinaryIns(dest, src) {} \
     std::string toString() const override { \
         return #name " " + operand1_->toString() + ", " + operand2_->toString(); \
