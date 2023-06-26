@@ -4,6 +4,8 @@
 
 #pragma once
 
+#include <set>
+
 #include "register.h"
 #include "program_structures.h"
 
@@ -87,31 +89,73 @@ namespace tiny::t86 {
 
     class RndRegAllocator : public RegAllocator {
     public:
-        RndRegAllocator(t86::Program &program) : p_(program) {}
-
-        Reg allocate() override {
-
+        RndRegAllocator(Program &program, size_t numFreeRegs) : p_(program) {
+            for (size_t i = 1; i <= numFreeRegs; ++i) {
+                freeRegs.insert(i);
+            }
         }
-
     private:
         void allocatePhysicalRegs() {
             for (auto& [funName, function] : p_.getFunctions()) {
                 auto &basicBlocks = function->getBasicBlocks();
                 for (auto &bb: basicBlocks) {
-                    for (auto &i: bb->getInstructions()) {
-                        /*for (auto &op: i->getOperands()) {
-                            if (op->isVariable()) {
-                                auto var = dynamic_cast<Variable *>(op.get());
-                                if (var->isGlobal()) {
-                                    //TODO
-                                } else {
-                                    //TODO
-                                }*/
-                            }
-                        }
-                    }
+                    allocate(bb.get());
+                }
+            }
+        }
+
+        Reg allocate() override {
+            // If there are no free registers, spill one randomly
+            if (freeRegs.empty()) {
+                spillRegister();
             }
 
-        t86::Program &p_;
+            size_t regId = *freeRegs.begin();
+            freeRegs.erase(freeRegs.begin());
+            return Reg(Reg::Type::GP, regId);
+        }
+
+        void allocate(BasicBlock *b) {
+            std::unordered_map<Operand*, Reg> operandToRegMap;
+
+            for (auto& instructionPtr : b->getInstructions()) {
+                Instruction *i = instructionPtr.get();
+
+                // Operands in memory
+                for (Operand* o : i->getOperands()) {
+                    if (o->isInMemory()) {
+                        Reg r = allocate();
+                        operandToRegMap[o] = r;
+                        i->prependLoadInstruction(r, o);
+                    }
+                }
+
+                // If it is the last use of an operand, release the register
+                for (Operand* o : i->getOperands()) {
+                    if (i->isLastUse(o)) {
+                        freeRegs.insert(operandToRegMap[o].getId());
+                        operandToRegMap.erase(o);
+                    }
+                }
+
+                // Assign register to definition
+                Operand* v = i->getDefinition();
+                if (v != nullptr) {
+                    Reg r = allocate();
+                    operandToRegMap[v] = r;
+                    i->assignRegToDef(r);
+                }
+            }
+        }
+
+        void spillRegister() {
+            size_t spillRegId = *(std::next(freeRegs.begin(), rand() % freeRegs.size()));
+            freeRegs.erase(spillRegId);
+
+            // TODO: You should handle moving the contents of this spilled register to memory.
+        }
+
+        std::set<size_t> freeRegs;
+        Program &p_;
     };
 }
