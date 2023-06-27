@@ -19,7 +19,8 @@ namespace tiny::t86 {
                   BP(Reg::Type::BP, INT_MAX - 1),
                   EAX(Reg::Type::GP, 0) {}
 
-        virtual Reg allocate() = 0;  // Pure virtual function
+        // allocates a free register on demand
+        virtual Reg allocate() = 0;
 
         const Reg &getSP() const { return SP; }
 
@@ -90,23 +91,23 @@ namespace tiny::t86 {
 
     class RndRegAllocator : public RegAllocator {
     public:
+        static void allocatePhysicalRegs(Program &program, size_t numFreeRegs) {
+            RndRegAllocator a(program, numFreeRegs);
+            for (auto& [funName, function] : a.p_.getFunctions()) {
+                auto &basicBlocks = function->getBasicBlocks();
+                for (auto &bb: basicBlocks) {
+                    a.computeDefUseChain(bb.get());
+                    a.allocate(bb.get());
+                    a.defUseChain_.clear();
+                }
+            }
+        }
+    private:
         RndRegAllocator(Program &program, size_t numFreeRegs) : p_(program) {
             for (size_t i = 1; i <= numFreeRegs; ++i) {
                 freeRegs_.insert(i);
             }
         }
-    private:
-        void allocatePhysicalRegs() {
-            for (auto& [funName, function] : p_.getFunctions()) {
-                auto &basicBlocks = function->getBasicBlocks();
-                for (auto &bb: basicBlocks) {
-                    computeDefUseChain(bb.get());
-                    allocate(bb.get());
-                    defUseChain_.clear();
-                }
-            }
-        }
-
 
         void computeDefUseChain(BasicBlock* block) {
             const auto& instructions = block->getInstructions();
@@ -124,7 +125,7 @@ namespace tiny::t86 {
         }
 
         Reg allocate() override {
-            // If there are no free registers, spill one randomly
+            // If there are no free registers, spill one
             if (freeRegs_.empty()) {
                 spillRegister();
             }
@@ -134,7 +135,19 @@ namespace tiny::t86 {
             return Reg(Reg::Type::GP, regId);
         }
 
+        void spillRegister() {
+            size_t spillRegId = *(std::next(freeRegs_.begin(), rand() % freeRegs_.size()));
+            freeRegs_.erase(spillRegId);
+
+            // TODO: You should handle moving the contents of this spilled register to memory.
+        }
+
         bool isLastUse(Instruction *instr, Operand* operand) {
+            //for BP and SP we don't care about the last use
+            auto reg = dynamic_cast<RegOp*>(operand);
+            if (reg != nullptr && (reg->reg_ == getBP() || reg->reg_ == SP)) {
+                return false;
+            }
             auto &uses = defUseChain_[operand];
 
             // Check if the instruction 'instr' is the last element in the vector of uses.
@@ -144,9 +157,30 @@ namespace tiny::t86 {
             }) == uses.rbegin();
         }
 
+        struct OperandHash {
+            std::size_t operator()(const Operand* operand) const {
+                return operand->hash();
+            }
+        };
+
+        struct OperandEqual {
+            bool operator()(const Operand* lhs, const Operand* rhs) const {
+                return lhs->equals(rhs);
+            }
+        };
+
         void allocate(BasicBlock *b) {
             std::unordered_map<Operand*, Reg> operandToRegMap;  // Map of operands to registers
-            std::unordered_set<Operand*> memoryOperands;  // Set of operands in memory
+            std::unordered_set<Operand*, OperandHash, OperandEqual> memoryOperands; // Set of operands which are in memory
+
+            // Initialize memoryOperands
+            for (auto& instr : b->getInstructions()) {
+                for (Operand* op : instr->getOperands()) {
+                    if (dynamic_cast<ImmOp*>(op) != nullptr || dynamic_cast<MemRegOffsetOp*>(op) != nullptr) {
+                        memoryOperands.insert(op);
+                    }
+                }
+            }
 
             for (auto it = b->getInstructions().begin(); it != b->getInstructions().end(); ++it) {
                 Instruction *i = it->get();
@@ -172,28 +206,27 @@ namespace tiny::t86 {
                 // If it is the last use of an operand, release the register
                 for (Operand* o : i->getOperands()) {
                     if (isLastUse(i, o)) {
-                        freeRegs_.insert(operandToRegMap[o].index());
-                        operandToRegMap.erase(o);
+                        //if the operand is in a register, we can free it
+                        if (operandToRegMap.find(o) != operandToRegMap.end()) {
+                            freeRegs_.insert(operandToRegMap[o].index());
+                            operandToRegMap.erase(o);
+                        }
                     }
                 }
 
 
-                // Assign register to definition
-                /*Operand* v = i->getDefinition();
-                if (v != nullptr) {
+                // we are defining a value, so we need to allocate a register for it
+                auto mov = dynamic_cast<MOVIns*>(i);
+                if (mov != nullptr && mov->operand1_) {
                     Reg r = allocate();
-                    operandToRegMap[v] = r;
-                    i->assignRegToDef(r);
-                }*/
+                    //update the abstract register with the physical register
+                    mov->operand1_ = new RegOp(r);
+                    operandToRegMap[mov->operand1_] = r;
+                }
             }
         }
 
-        void spillRegister() {
-            size_t spillRegId = *(std::next(freeRegs_.begin(), rand() % freeRegs_.size()));
-            freeRegs_.erase(spillRegId);
 
-            // TODO: You should handle moving the contents of this spilled register to memory.
-        }
 
         std::unordered_map<Operand *, std::vector<std::pair<Instruction *, unsigned long>>> defUseChain_;
         std::set<size_t> freeRegs_;
