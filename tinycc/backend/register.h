@@ -37,6 +37,12 @@ namespace tiny::t86 {
             }
         }
 
+        bool operator==(const Reg& other) const {
+            // replace these with actual comparison logic based on your Reg definition
+            // this is just an example
+            return this->type() == other.type() && this->index() == other.index();
+        }
+
     private:
         Type type_;
         int index_;

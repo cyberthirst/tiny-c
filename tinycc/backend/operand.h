@@ -14,6 +14,8 @@ namespace tiny::t86 {
         virtual ~Operand() = default;
 
         virtual std::string toString() const = 0;
+        virtual bool equals(const Operand *other) const = 0;
+        virtual std::size_t hash() const = 0;
     };
 
     class RegOp : public Operand {
@@ -24,7 +26,15 @@ namespace tiny::t86 {
             return reg_.toString();
         }
 
-    private:
+
+        bool equals(const Operand *other) const override {
+            auto otherRegOp = dynamic_cast<const RegOp*>(other);
+            return otherRegOp != nullptr && reg_ == otherRegOp->reg_;
+        }
+
+        std::size_t hash() const override {
+            return std::hash<int>{}(static_cast<int>(reg_.type())) ^ std::hash<int>{}(reg_.index());
+        }
         Reg reg_;
     };
 
@@ -36,7 +46,15 @@ namespace tiny::t86 {
             return "[" + reg_.toString() + (offset_ >= 0 ? " + " : " - ") + std::to_string(std::abs(offset_)) + "]";
         }
 
-    private:
+        bool equals(const Operand *other) const override {
+            auto otherMemRegOffsetOp = dynamic_cast<const MemRegOffsetOp*>(other);
+            return otherMemRegOffsetOp != nullptr && reg_ == otherMemRegOffsetOp->reg_ && offset_ == otherMemRegOffsetOp->offset_;
+        }
+
+        std::size_t hash() const override {
+            return std::hash<int>{}(static_cast<int>(reg_.type())) ^ std::hash<int>{}(reg_.index()) ^ std::hash<int>{}(offset_);
+        }
+
         Reg reg_;
         int offset_;
     };
@@ -49,7 +67,15 @@ namespace tiny::t86 {
             return reg_.toString() + (offset_ >= 0 ? " + " : " - ") + std::to_string(std::abs(offset_));
         }
 
-    private:
+        bool equals(const Operand *other) const override {
+            auto otherRegOffsetOp = dynamic_cast<const RegOffsetOp*>(other);
+            return otherRegOffsetOp != nullptr && reg_ == otherRegOffsetOp->reg_ && offset_ == otherRegOffsetOp->offset_;
+        }
+
+        std::size_t hash() const override {
+            return std::hash<int>{}(static_cast<int>(reg_.type())) ^ std::hash<int>{}(reg_.index()) ^ std::hash<int>{}(offset_);
+        }
+
         Reg reg_;
         int offset_;
     };
@@ -62,7 +88,15 @@ namespace tiny::t86 {
             return std::to_string(value_);
         }
 
-    private:
+        bool equals(const Operand *other) const override {
+            auto otherImmOp = dynamic_cast<const ImmOp*>(other);
+            return otherImmOp != nullptr && value_ == otherImmOp->value_;
+        }
+
+        std::size_t hash() const override {
+            return std::hash<int>{}(value_);
+        }
+
         int value_;
     };
 
@@ -81,9 +115,18 @@ namespace tiny::t86 {
             return label_;
         }
 
-    private:
+        bool equals(const Operand *other) const override {
+            auto otherLabelOp = dynamic_cast<const LabelOp*>(other);
+            return otherLabelOp != nullptr && label_ == otherLabelOp->label_ && address_ == otherLabelOp->address_;
+        }
+
+        std::size_t hash() const override {
+            return std::hash<std::string>{}(label_) ^ std::hash<int>{}(address_);
+        }
+
         std::string label_;
         int address_;
     };
+
 
 }
