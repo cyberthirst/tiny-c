@@ -18,6 +18,8 @@ namespace tiny::t86 {
 
         Reg(Type type, int index) : type_(type), index_(index) {}
 
+        Reg() {}
+
         Type type() const { return type_; }
 
         int index() const { return index_; }

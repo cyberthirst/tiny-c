@@ -134,6 +134,15 @@ namespace tiny::t86 {
             return Reg(Reg::Type::GP, regId);
         }
 
+        bool isLastUse(Instruction *instr, Operand* operand) {
+            auto &uses = defUseChain_[operand];
+
+            // Check if the instruction 'instr' is the last element in the vector of uses.
+            // The instruction pointer and the index (i) of the operand should match.
+            return std::find_if(uses.rbegin(), uses.rend(), [&](const auto &pair) {
+                return pair.first == instr;
+            }) == uses.rbegin();
+        }
 
         void allocate(BasicBlock *b) {
             std::unordered_map<Operand*, Reg> operandToRegMap;  // Map of operands to registers
@@ -147,10 +156,11 @@ namespace tiny::t86 {
                         Reg r = allocate();
                         operandToRegMap[o] = r;
 
-                        // Create MOV instruction
-                        auto moveInstr = std::make_unique<MOVIns>(r, o);
+                        // operand is in memory, so we need to load it into a register
+                        auto moveInstr = std::make_unique<MOVIns>(new RegOp(r), o);
 
-                        // Insert MOV instruction into the basic block
+                        // insert MOV instruction into the basic block
+                        // currently this is very stupid & inefficient the insert has O(n) complexity, using it for simplicity
                         it = b->getInstructions().insert(it, std::move(moveInstr));
 
                         // Since we inserted a new instruction, the iterator positions have changed.
@@ -161,19 +171,20 @@ namespace tiny::t86 {
 
                 // If it is the last use of an operand, release the register
                 for (Operand* o : i->getOperands()) {
-                    if (i->isLastUse(o)) {
-                        freeRegs_.insert(operandToRegMap[o].getId());
+                    if (isLastUse(i, o)) {
+                        freeRegs_.insert(operandToRegMap[o].index());
                         operandToRegMap.erase(o);
                     }
                 }
 
+
                 // Assign register to definition
-                Operand* v = i->getDefinition();
+                /*Operand* v = i->getDefinition();
                 if (v != nullptr) {
                     Reg r = allocate();
                     operandToRegMap[v] = r;
                     i->assignRegToDef(r);
-                }
+                }*/
             }
         }
 
