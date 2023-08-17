@@ -1,3 +1,18 @@
+## Overview of instruction types
+Your code appears to be a representation of an Intermediate Representation (IR) in a compiler. This IR uses static single assignment (SSA) form, where each variable is assigned exactly once, and every variable is defined before it is used.
+
+Here's a brief overview of what each class represents:
+
+1. `Instruction` class: This is the base class for all instructions. Every instruction has an opcode, a type, an AST pointer, and a name. There are several subclasses of `Instruction`, each representing a different kind of instruction.
+
+2. `ImmI`, `ImmF`, `ImmS` classes: These classes represent instructions with immediate values. The `ImmI` class is for instructions with integer immediate values, `ImmF` for floating-point immediate values, and `ImmS` for symbolic immediate values.
+
+3. `Reg`, `RegReg`, `RegRegImmI`, `RegRegs` classes: These classes represent instructions that operate on registers. The `Reg` class is for instructions with a single register operand, `RegReg` is for instructions with two register operands, `RegRegImmI` is for instructions with two register operands and an immediate integer value, and `RegRegs` is for instructions with multiple register operands.
+
+4. `Terminator`, `TerminatorB`, `TerminatorReg`, `TerminatorRegBB` classes: These classes represent terminator instructions. Terminators mark the end of a basic block in the control flow graph. The `Terminator` class is for basic terminator instructions, `TerminatorB` is for terminators with a basic block target, `TerminatorReg` is for terminators with a register operand, and `TerminatorRegBB` is for terminators with a register operand and two basic block targets.
+
+In terms of translation, I would assume you're looking for a way to transform these instructions into machine code or another type of intermediate code. This typically involves a process known as code generation, which is typically part of the backend of a compiler. The process for this will heavily depend on your target architecture or language.
+
 ## Terminator instructions
 These classes are subclasses of the Instruction class, which represents an abstract representation of instructions in an intermediate language. They each represent a different type of instruction related to branching, terminating, and control flow in a program.
 

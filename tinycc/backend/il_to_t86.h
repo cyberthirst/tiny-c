@@ -99,7 +99,7 @@ namespace tiny {
                                                      new t86::ImmOp(stackSize));
             //currently we have a primitive way of handling function arguments
             // - the caller pushes the arguments on the stack
-            // - the calle then MOVs the arguments from the stack to the function's stack frame
+            // - the callee then MOVs the arguments from the stack to the function's stack frame
             // - the callee then uses the arguments from the stack frame
             // - additionally we assume that all the arguments have fixed size
             // - this is all done as part of the function prologue
@@ -202,8 +202,13 @@ namespace tiny {
         // Visitor for bnary operation on two registers.
         void visit(il::Instruction::RegReg* instr) override {
             switch (instr->opcode) {
+                //if the source operand is LD, then we:
+                // 1. allocate a new reg
+                // 2. move the source operand to the new reg
+                // 3. perform the operation on the new reg
+                // - this is good because we won't overwrite the variable register
                 #define ARITHMETIC_INS(IR_INSTR, T86_INSTR) \
-                    case il::Opcode::IR_INSTR: { \
+                    case il::Opcode::IR_INSTR: {            \
                     t86::RegOp *op1 = regMap_[instr->reg1]; \
                     t86::RegOp *op2 = regMap_[instr->reg2]; \
                     (*this) += new t86::T86_INSTR##Ins( \
@@ -352,7 +357,9 @@ namespace tiny {
         StackAllocator stackAllocator_;
 
         t86::BasicBlock *bb_ = nullptr;
+        //the function object into which we are compiling (will contain the target insns as opposed to ilf_ which is in IR)
         t86::Function *f_ = nullptr;
+        //the function we are currently compiling, it is in the intermediate representation
         const il::Function *ilf_ = nullptr;
 
         std::queue<il::BasicBlock *> bbWorklist_;

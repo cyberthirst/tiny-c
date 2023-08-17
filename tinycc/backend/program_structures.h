@@ -50,7 +50,7 @@ namespace tiny::t86 {
 
         std::string toString() const {
             std::stringstream s;
-            s << "# bb: " << name << ":";
+            s << "#bb: " << name << ":";
             for (auto & i : insns_) {
                 s << "\n";
                 //TODO print the instruction
@@ -143,7 +143,7 @@ namespace tiny::t86 {
             std::stringstream ss;
             ss << emitStart();
             for (auto &f : functions_) {
-                ss << "# " << f.first << "\n";
+                ss << "#function: " << f.first << "\n";
                 ss << f.second->toString();
             }
             ss << '\n';

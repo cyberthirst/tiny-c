@@ -14,6 +14,7 @@
 #include "backend/il_to_t86.h"
 #include "optimizer/optimizer.h"
 #include "backend/assembler.h"
+#include "backend/register_alloc.h"
 
 //tests
 #include "test/arithmetic/arithmetic_tests.h"
@@ -79,8 +80,14 @@ std::string runVM(const t86::Program & program) {
 }
 
 bool testASMProgram(t86::Program const & p, Test const * test) {
+    if (!test || !test->testResult || !Options::testASM) {
+            return true;
+    }
     std::string result = runVM(p);
-    std::cout << "vm result: " << result << std::endl;
+    if (test->marked) {
+         std::cout << p.toString() << std::endl;
+        std::cout << "vm result: " << result << std::endl;
+    }
     if (stoi(result) != test->result) {
         std::cerr << "ERROR: expected " << test->result << ", got " << result << color::reset << std::endl;
         return false;
@@ -110,10 +117,13 @@ bool compile(std::string const & contents, Test const * test, TestResult *result
         // translate to target
         t86::Program t86Program = T86CodeGen::translateProgram(p);
         Assembler::assemble(t86Program);
-        if (test && test->testResult && Options::testASM) {
-            if (!testASMProgram(t86Program, test))
-                return false;
-        }
+        if (!testASMProgram(t86Program, test))
+            return false;
+        // register allocation
+        t86::RndRegAllocator::allocatePhysicalRegs(t86Program, Options::numRegisters);
+        if (!testASMProgram(t86Program, test))
+            return false;
+
         return (test == nullptr) || ! (test->shouldError);
     } catch (SourceError const & e) {
         if ((test != nullptr) && test->shouldError == e.kind())
@@ -180,6 +190,10 @@ int main(int argc, char * argv []) {
         if (RUN_ALL_TEST_SUITES) {
             RunAllTestSuites();
         } else {
+            //TODO create some selected test suite structure
+            // add the suites to this structure in the test files:
+            //  - something like DEFINE_TEST_CATEGORY(basic_calculator_tests, true), where true represents that
+            //    the suite should be added to selected suites
             RunSelectedTestSuite("basic_calculator_tests");
             //RunSelectedTestSuite("function_tests");
         }

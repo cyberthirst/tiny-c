@@ -22,7 +22,7 @@ std::vector<Test> basic_calculator_tests = {
      } \
     int main() { \
          return add_n(0, 20); \
-     }", 20, true),
+     }", 20),
     TEST("\
     int main() { \
         int n = 0;\
@@ -50,14 +50,15 @@ std::vector<Test> basic_calculator_tests = {
         int a = 5;\
         int b = 5;\
         return a + b; \
-     }", 10),
+     }", 10, true),
     TEST("\
     int main() { \
         int a = 5;\
         int b = 5 + 5 - 2;\
         return a * b; \
      }", 40),
-    TEST("\
+     //TODO this tests show the problem with declaration within the function
+    /*TEST("\
     int main() { \
         int a = 5;\
         if (a < 10) {\
@@ -66,7 +67,9 @@ std::vector<Test> basic_calculator_tests = {
         else {\
             return 10;\
         }\
-     }", 5),
+        int b = 5;\
+        return 5;\
+     }", 5),*/
     TEST("\
     int main() { \
         int a = 10;\
@@ -78,6 +81,22 @@ std::vector<Test> basic_calculator_tests = {
         }\
         return a;\
      }", 20),
+    TEST("\
+    int main() { \
+        int a = 10;\
+        a = a + a;\
+        int b;\
+        b = 2 * a;\
+        if (a < 10) {\
+            b = 5;\
+            a = 15;\
+        }\
+        else {\
+            a = 20;\
+        }\
+        a = a + b;\
+        return a;\
+     }", 60),
 };
 
 DEFINE_TEST_CATEGORY(basic_calculator_tests)

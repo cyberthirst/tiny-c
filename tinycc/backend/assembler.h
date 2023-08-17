@@ -19,7 +19,7 @@ namespace tiny {
         }
     private:
         //3 is the size of the start function in instructions
-        //TODO very fragile, we should calculate this, however currently the start function
+        // TODO very fragile, we should calculate this, however currently the start function
         // is implemented as a simple string and thus it is hard to calculate
         // rather implement the start function as a function (or atleast basic block) and calculate it's size
         // programatically
