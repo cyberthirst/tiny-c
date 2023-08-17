@@ -58,7 +58,6 @@ namespace tiny::t86 {
 
 /*
  * $$$$$$$$$$$$$$$ BASIC EXPLANATION $$$$$$$$$$$$$$$
- * plan of attack
  * 1. we need to keep track of liveness of variables
  *   - because we only consider local register allocation, this should be easy and we won't
  *     need any data flow analysis
@@ -96,13 +95,34 @@ namespace tiny::t86 {
             for (auto& [funName, function] : a.p_.getFunctions()) {
                 auto &basicBlocks = function->getBasicBlocks();
                 for (auto &bb: basicBlocks) {
-                    a.computeDefUseChain(bb.get());
+                    a.init(bb.get());
                     a.allocate(bb.get());
-                    a.defUseChain_.clear();
+                    a.deinit();
                 }
             }
         }
     private:
+        void init(BasicBlock* b) {
+            computeDefUseChain(b);
+            // Initialize memoryOperands_
+            for (auto& instr : b->getInstructions()) {
+                for (Operand* op : instr->getOperands()) {
+                    //if (dynamic_cast<ImmOp*>(op) != nullptr || dynamic_cast<MemRegOffsetOp*>(op) != nullptr) {
+                   if (dynamic_cast<MemRegOffsetOp*>(op) != nullptr) {
+                        memoryOperands_.insert(op);
+                    }
+                }
+            }
+        }
+
+        void deinit() {
+            defUseChain_.clear();
+            freeRegs_.clear();
+            operandToRegMap_.clear();
+            memoryOperands_.clear();
+        }
+
+
         RndRegAllocator(Program &program, size_t numFreeRegs) : p_(program) {
             for (size_t i = 1; i <= numFreeRegs; ++i) {
                 freeRegs_.insert(i);
@@ -136,18 +156,18 @@ namespace tiny::t86 {
         }
 
         void spillRegister() {
-            size_t spillRegId = *(std::next(freeRegs_.begin(), rand() % freeRegs_.size()));
-            freeRegs_.erase(spillRegId);
-
-            // TODO: You should handle moving the contents of this spilled register to memory.
+            /*size_t spillRegId = *(std::next(freeRegs_.begin(), rand() % freeRegs_.size()));
+            freeRegs_.erase(spillRegId);*/
+            // 1. we need to add the instruction to move the operand to memory
+            // 2. we need to remove the register from the operandToReg_ map
+            // 3. we need to add the reg
         }
 
         bool isLastUse(Instruction *instr, Operand* operand) {
             //for BP and SP we don't care about the last use
-            auto reg = dynamic_cast<RegOp*>(operand);
-            if (reg != nullptr && (reg->reg_ == getBP() || reg->reg_ == SP)) {
+            if (isBPorSP(operand))
                 return false;
-            }
+
             auto &uses = defUseChain_[operand];
 
             // Check if the instruction 'instr' is the last element in the vector of uses.
@@ -169,29 +189,43 @@ namespace tiny::t86 {
             }
         };
 
-        void allocate(BasicBlock *b) {
-            std::unordered_map<Operand*, Reg> operandToRegMap;  // Map of operands to registers
-            std::unordered_set<Operand*, OperandHash, OperandEqual> memoryOperands; // Set of operands which are in memory
-
-            // Initialize memoryOperands
-            for (auto& instr : b->getInstructions()) {
-                for (Operand* op : instr->getOperands()) {
-                    if (dynamic_cast<ImmOp*>(op) != nullptr || dynamic_cast<MemRegOffsetOp*>(op) != nullptr) {
-                        memoryOperands.insert(op);
-                    }
-                }
+        Reg* findReg(Operand* operand) {
+            auto it = operandToRegMap_.find(operand);
+            if (it != operandToRegMap_.end()) {
+                // The operand is already present in the map.
+                return &(it->second);
+            } else {
+                // The operand isn't present in the map.
+                return nullptr;
             }
+        }
 
+        bool isBPorSP(Operand* operand) {
+            auto reg = dynamic_cast<RegOp*>(operand);
+            if (reg != nullptr && (reg->reg_ == getBP() || reg->reg_ == SP)) {
+                return true;
+            }
+            return false;
+        }
+
+        void allocate(BasicBlock *b) {
             for (auto it = b->getInstructions().begin(); it != b->getInstructions().end(); ++it) {
                 Instruction *i = it->get();
 
-                for (Operand* o : i->getOperands()) {
-                    if (memoryOperands.find(o) != memoryOperands.end()) {
+                auto operands = i->getOperands();
+                for (size_t index = 0; index < operands.size(); ++index) {
+                    Operand* o = operands[index];
+                    if (memoryOperands_.find(o) != memoryOperands_.end()) {
                         Reg r = allocate();
-                        operandToRegMap[o] = r;
 
+                        //we moved the operand from memory to register, so we update the structure accordingly
+                        operandToRegMap_[o] = r;
+                        memoryOperands_.erase(o);
+
+                        auto newOp = new RegOp(r);
                         // operand is in memory, so we need to load it into a register
-                        auto moveInstr = std::make_unique<MOVIns>(new RegOp(r), o);
+                        auto moveInstr = std::make_unique<MOVIns>(newOp, o);
+                        *operands[index] = newOp;
 
                         // insert MOV instruction into the basic block
                         // currently this is very stupid & inefficient the insert has O(n) complexity, using it for simplicity
@@ -204,30 +238,46 @@ namespace tiny::t86 {
                 }
 
                 // If it is the last use of an operand, release the register
-                for (Operand* o : i->getOperands()) {
+                /*for (Operand* o : i->getOperands()) {
                     if (isLastUse(i, o)) {
-                        //if the operand is in a register, we can free it
-                        if (operandToRegMap.find(o) != operandToRegMap.end()) {
-                            freeRegs_.insert(operandToRegMap[o].index());
-                            operandToRegMap.erase(o);
+                        //if the operand is in a register, we can free it as it won't be used anymore
+                        //TODO the def-use chain probably operates on the abstract registers so if we pass here
+                        // a physical one it will not be found and thus incorrectly freed
+                        if (operandToRegMap_.find(o) != operandToRegMap_.end()) {
+                            freeRegs_.insert(operandToRegMap_[o].index());
+                            operandToRegMap_.erase(o);
+                            //we don't need to add the operand to the memoryOperands_ set, as it won't be used anymore
                         }
                     }
-                }
+                }*/
 
-
-                // we are defining a value, so we need to allocate a register for it
-                auto mov = dynamic_cast<MOVIns*>(i);
-                if (mov != nullptr && mov->operand1_) {
-                    Reg r = allocate();
-                    //update the abstract register with the physical register
-                    mov->operand1_ = new RegOp(r);
-                    operandToRegMap[mov->operand1_] = r;
-                }
+                // if we are defining a value, we need to allocate a register for it
+                /*auto mov = dynamic_cast<MOVIns*>(i);
+                if (mov != nullptr ) {
+                    //we don't care about the BP and SP registers
+                    //we don't need to perform any allocation for them
+                    if (isBPorSP(mov->operand1_)) {
+                        continue;
+                    }
+                    //we want to allocate the register only if the source register is not already allocated
+                    auto r = findReg(mov->operand2_);
+                    if (r != nullptr) {
+                        //if the source is already allocated, we just update the destination to point to the same register
+                        operandToRegMap_[mov->operand1_] = *r;
+                    }
+                    else {
+                        Reg r = allocate();
+                        //update the abstract register with the physical register
+                        mov->operand1_ = new RegOp(r);
+                        //map the source operand to the register
+                        operandToRegMap_[mov->operand2_] = r;
+                    }
+                }*/
             }
         }
 
-
-
+        std::unordered_map<Operand*, Reg, OperandHash, OperandEqual> operandToRegMap_;  // Map of operands to registers
+        std::unordered_set<Operand*, OperandHash, OperandEqual> memoryOperands_; // Set of operands which are in memory
         std::unordered_map<Operand *, std::vector<std::pair<Instruction *, unsigned long>>> defUseChain_;
         std::set<size_t> freeRegs_;
         Program &p_;
