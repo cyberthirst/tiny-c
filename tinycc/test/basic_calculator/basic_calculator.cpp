@@ -33,6 +33,15 @@ std::vector<Test> basic_calculator_tests = {
      }", 10),
     TEST("\
     int main() { \
+        int n = 0;\
+        while (n < 10) {\
+            int a = 1;\
+            n = n + a;\
+        }\
+         return n; \
+     }", 10, true),
+    TEST("\
+    int main() { \
         return 1 + 10; \
      }", 11),
     TEST("\
@@ -50,15 +59,14 @@ std::vector<Test> basic_calculator_tests = {
         int a = 5;\
         int b = 5;\
         return a + b; \
-     }", 10, true),
+     }", 10),
     TEST("\
     int main() { \
         int a = 5;\
         int b = 5 + 5 - 2;\
         return a * b; \
      }", 40),
-     //TODO this tests show the problem with declaration within the function
-    /*TEST("\
+    TEST("\
     int main() { \
         int a = 5;\
         if (a < 10) {\
@@ -69,7 +77,23 @@ std::vector<Test> basic_calculator_tests = {
         }\
         int b = 5;\
         return 5;\
-     }", 5),*/
+     }", 5),
+    TEST("\
+    int main() { \
+        int a = 5;\
+        if (a < 10) {\
+            if (a < 5) {\
+                return a;\
+            }\
+            int a = 4;\
+            return 4;\
+        }\
+        else {\
+            return 10;\
+        }\
+        int b = 5;\
+        return 5;\
+     }", 4),
     TEST("\
     int main() { \
         int a = 10;\

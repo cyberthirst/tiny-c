@@ -387,6 +387,7 @@ namespace tiny::il {
         struct Context {
             std::unordered_map<Symbol, Instruction *> locals;
             BasicBlock * localsBlock = nullptr;
+            BasicBlock * firstBB = nullptr;
             //following bbs have to be part of the contexts because eg we can enter a for loop in a for loop
             //thus if those structures would be context insensitive, we would lose the information about the outer loop
             //used to easily implement break
@@ -395,11 +396,10 @@ namespace tiny::il {
             BasicBlock * continueBlock = nullptr;
 
             Context(BasicBlock * locals):
-                localsBlock{locals} {
-            }
-            Context(BasicBlock * locals, BasicBlock * mergeBB, BasicBlock * continueBB):
-                    localsBlock{locals}, breakBlock{mergeBB}, continueBlock{continueBB} {
-            }
+                localsBlock{locals} { }
+            Context(BasicBlock * locals, BasicBlock * firstBB_, BasicBlock * mergeBB, BasicBlock * continueBB):
+                    localsBlock{locals}, firstBB{firstBB_}, breakBlock{mergeBB}, continueBlock{continueBB} { }
+
             int sizeOfLocals = 0; //size of locals in bytes
 
         }; // ASTToILTranslator::Context
@@ -431,27 +431,20 @@ namespace tiny::il {
 
         // Enters new block.
         void enterBlock(std::string const & name = "") {
+
+            BasicBlock * locals = f_->addBasicBlock(name + "_locals");
             BasicBlock * bb = f_->addBasicBlock(name);
             if (! bb_->terminated())
-                bb_->append(JMP(bb));
+                bb_->append(JMP(locals));
             bb_ = bb;
-            //TODO this is probably not correct
-            // when we translate this given block the instructions will be added to the bb_ basic block
-            // however, this is also the block that we use 'locals' block when creating the context
-            // the locals block should probably only contain the ALLOCAs of new variables
-            // but this we mix them
-            // suppose even program like this:
-            // int a;
-            // if (cond) { } <- when we compile the if we also create a new merge block
-            // int b;        <- however creating variables is done via addVariable function which
-            //                  adds the variable to the locals block of the current context
-            //                  and this basic block is the orignal one before the if, not the merge one
-            //                  so the ALLOCA is added under the JMP to the if bb, which is wrong
-            // this can be temporalily avoided by declaring variables only at the begining of a block
-            contexts_.push_back(Context{bb_, contexts_.back().breakBlock, contexts_.back().continueBlock});
+            contexts_.emplace_back(locals, bb_, contexts_.back().breakBlock,
+                                   contexts_.back().continueBlock);
         }
 
         void leaveBlock() {
+            BasicBlock * locals = contexts_.back().localsBlock;
+            BasicBlock * firstBB = contexts_.back().firstBB;
+            locals->append(JMP(firstBB));
             f_->updateLocalsSize(-contexts_.back().sizeOfLocals);
             contexts_.pop_back();
         }
