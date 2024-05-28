@@ -10,7 +10,6 @@
 #include "program_structures.h"
 
 namespace tiny::t86 {
-    using DefUseChain = std::unordered_map<Operand *, std::vector<std::pair<Instruction *, size_t>>>;
 
     class RegAllocator {
     public:
@@ -83,10 +82,10 @@ namespace tiny::t86 {
  */
 
 
-    class LocalRegAllocator : public RegAllocator {
+    class BeladyRegAllocator : public RegAllocator {
     public:
         static void allocatePhysicalRegs(Program &program, size_t numFreeRegs) {
-            LocalRegAllocator a(program, numFreeRegs);
+            BeladyRegAllocator a(program, numFreeRegs);
             for (auto& [funName, function] : a.p_.getFunctions()) {
                 auto &basicBlocks = function->getBasicBlocks();
                 //allocate physical regs for each basic block
@@ -100,26 +99,16 @@ namespace tiny::t86 {
     private:
         void init(BasicBlock* b) {
             computeLiveness(b);
-            // Initialize memoryOperands_
-            for (auto& instr : b->getInstructions()) {
-                for (Operand* op : instr->getOperands()) {
-                    //if (dynamic_cast<ImmOp*>(op) != nullptr || dynamic_cast<MemRegOffsetOp*>(op) != nullptr) {
-                   if (dynamic_cast<MemRegOffsetOp*>(op) != nullptr) {
-                        memoryOperands_.insert(op);
-                    }
-                }
-            }
         }
 
         void deinit() {
             liveness.clear();
             freeRegs_.clear();
             operandToRegMap_.clear();
-            memoryOperands_.clear();
         }
 
 
-        LocalRegAllocator(Program &program, size_t numFreeRegs) : p_(program) {
+        BeladyRegAllocator(Program &program, size_t numFreeRegs) : p_(program) {
             for (size_t i = 1; i <= numFreeRegs; ++i) {
                 freeRegs_.insert(i);
             }
@@ -135,15 +124,22 @@ namespace tiny::t86 {
                     liveness[i] = liveness[i + 1];
 
                 const auto& instruction = instructions[i];
-                // for MOVs, we set the source as live, and remove the destination from live
-                // TODO arithmetic instructions also invalidate the destination (and possibly also other insns)
-                if (dynamic_cast<MOVIns*>(instruction.get()) != nullptr) {
-                    auto target = instruction->getOperands()[0];
-                    auto source = instruction->getOperands()[1];
-                    liveness[i].erase(target);
-                    liveness[i].insert(source);
+                const auto& binary = dynamic_cast<BinaryIns*>(instruction.get());
+                // for binary insns (except CMP) we need to remove the target and add the source
+                if (binary != nullptr) {
+                    if (dynamic_cast<CMPIns *>(instruction.get()) != nullptr) {
+                        for (const auto& operand : binary->getOperands())
+                            liveness[i].insert(operand);
+                        continue;
+                    }
+                    else {
+                        auto target = binary->getOperands()[0];
+                        auto source = binary->getOperands()[1];
+                        liveness[i].erase(target);
+                        liveness[i].insert(source);
 
-                    continue;
+                        continue;
+                    }
                 }
 
                 for (const auto& operand : instruction->getOperands()) {
@@ -168,11 +164,42 @@ namespace tiny::t86 {
         }
 
         void spillRegister() {
-            /*size_t spillRegId = *(std::next(freeRegs_.begin(), rand() % freeRegs_.size()));
-            freeRegs_.erase(spillRegId);*/
-            // 1. we need to add the instruction to move the operand to memory
-            // 2. we need to remove the register from the operandToReg_ map
-            // 3. we need to add the reg
+            assert(freeRegs_.empty());
+            assert(curInsIndex < liveness.size());
+
+            std::unordered_map<Operand*, Reg, OperandHash, OperandEqual> live = operandToRegMap_;
+            Operand * toSpill = nullptr;
+
+
+            // Find the operand that is used furthest in the future
+
+            for (size_t j = curInsIndex + 1; j < liveness.size(); ++j) {
+                for (const auto& operand : liveness[j]) {
+                    if (live.size() == 1) {
+                        toSpill = live.begin()->first;
+                        break;
+                    }
+                    else {
+                        live.erase(operand);
+                    }
+                }
+            }
+
+            assert(toSpill != nullptr);
+
+            // Spill the register
+            // temporary solution assumes that the operand to be spilled corresponds to a stack variable
+            MemRegOffsetOp *mem = dynamic_cast<MemRegOffsetOp*>(toSpill);
+            assert(mem != nullptr);
+            MOVIns *mov = new MOVIns(new MemRegOffsetOp(BP, mem->offset_),
+                                     new RegOp(operandToRegMap_[toSpill]));
+            currentBlock_->getInstructions().insert(currentBlock_->getInstructions().begin() + curInsIndex,
+                                                    std::unique_ptr<Instruction>(mov));
+            curInsIndex++;
+
+            // Free the register
+            freeRegs_.insert(operandToRegMap_[toSpill].index());
+            operandToRegMap_.erase(toSpill);
         }
 
         bool isLastUse(Operand* operand, size_t i) {
@@ -200,16 +227,6 @@ namespace tiny::t86 {
             }
         };
 
-        Reg* findReg(Operand* operand) {
-            auto it = operandToRegMap_.find(operand);
-            if (it != operandToRegMap_.end()) {
-                // The operand is already present in the map.
-                return &(it->second);
-            } else {
-                // The operand isn't present in the map.
-                return nullptr;
-            }
-        }
 
         bool isBPorSP(Operand* operand) {
             auto reg = dynamic_cast<RegOp*>(operand);
@@ -219,18 +236,11 @@ namespace tiny::t86 {
             return false;
         }
 
-        void updateLivenessAndInsns(BasicBlock *b, size_t i, Operand *original, Operand *replacement) {
-            // update all the instructions that use the original operand
-            for (auto it = b->getInstructions().begin() + i; it != b->getInstructions().end(); ++it) {
-
-            }
-
-            // update the liveness of the original operand
-            // - remove the original operand from the liveness set and add the replacement
-        }
 
         void allocate(BasicBlock *b) {
+            currentBlock_ = b;
             for (auto it = b->getInstructions().begin(); it != b->getInstructions().end(); ++it) {
+                curInsIndex = it - b->getInstructions().begin();
                 Instruction *i = it->get();
 
                 if (dynamic_cast<MOVIns*>(i) != nullptr) {
@@ -281,7 +291,7 @@ namespace tiny::t86 {
                             freeRegs_.insert(operandToRegMap_[o].index());
                             operandToRegMap_.erase(o);
                             // If the operand is in memory, we need to spill it
-                            MemRegOffsetOp *mem = dynamic_cast<MemRegOffsetOp *>(o);
+                            auto *mem = dynamic_cast<MemRegOffsetOp *>(o);
                             if (mem != nullptr) {
                                 // TODO spill the operand
                             }
@@ -291,8 +301,9 @@ namespace tiny::t86 {
             }
         }
 
+        BasicBlock *currentBlock_;
+        size_t curInsIndex;
         std::unordered_map<Operand*, Reg, OperandHash, OperandEqual> operandToRegMap_;  // Map of operands to registers
-        std::unordered_set<Operand*, OperandHash, OperandEqual> memoryOperands_; // Set of operands which are in memory
         std::unordered_map<size_t, std::set<Operand*, OperandEqual>> liveness;
         // TODO represent free regs just with a simple counter
         std::set<size_t> freeRegs_;
