@@ -82,18 +82,14 @@ namespace tiny::t86 {
  *
  */
 
-    class BeladyRegAllocator : public RegAllocator {
-    public:
-    private:
 
-    };
-
-    class RndRegAllocator : public RegAllocator {
+    class LocalRegAllocator : public RegAllocator {
     public:
         static void allocatePhysicalRegs(Program &program, size_t numFreeRegs) {
-            RndRegAllocator a(program, numFreeRegs);
+            LocalRegAllocator a(program, numFreeRegs);
             for (auto& [funName, function] : a.p_.getFunctions()) {
                 auto &basicBlocks = function->getBasicBlocks();
+                //allocate physical regs for each basic block
                 for (auto &bb: basicBlocks) {
                     a.init(bb.get());
                     a.allocate(bb.get());
@@ -103,7 +99,7 @@ namespace tiny::t86 {
         }
     private:
         void init(BasicBlock* b) {
-            computeDefUseChain(b);
+            computeLiveness(b);
             // Initialize memoryOperands_
             for (auto& instr : b->getInstructions()) {
                 for (Operand* op : instr->getOperands()) {
@@ -116,7 +112,7 @@ namespace tiny::t86 {
         }
 
         void deinit() {
-            defUseChain_.clear();
+            liveness.clear();
             freeRegs_.clear();
             operandToRegMap_.clear();
             memoryOperands_.clear();
@@ -129,17 +125,32 @@ namespace tiny::t86 {
             }
         }
 
-        void computeDefUseChain(BasicBlock* block) {
+        void computeLiveness(BasicBlock* block) {
             const auto& instructions = block->getInstructions();
 
-            // For each instruction
-            for (size_t i = 0; i < instructions.size(); ++i) {
-                const auto& instruction = instructions[i];
+            // Iterate over the instructions in reverse order
+            for (int i = instructions.size() - 1; i >= 0; --i) {
+                // copy the set of live vars from the next instruction (ie the one with the higher index)
+                if (i < instructions.size() - 1)
+                    liveness[i] = liveness[i + 1];
 
-                // For each operand in the instruction
+                const auto& instruction = instructions[i];
+                // for MOVs, we set the source as live, and remove the destination from live
+                if (dynamic_cast<MOVIns*>(instruction.get()) != nullptr) {
+                    auto target = instruction->getOperands()[0];
+                    auto source = instruction->getOperands()[1];
+                    liveness[i].erase(target);
+                    liveness[i].insert(source);
+
+                    continue;
+                }
+
                 for (const auto& operand : instruction->getOperands()) {
-                    // Add the current instruction and its index to the def-use chain of the operand
-                    defUseChain_[operand].push_back(std::make_pair(instruction.get(), i));
+                    // don't care for labels
+                    if (dynamic_cast<LabelOp*>(operand) != nullptr)
+                        continue;
+
+                    liveness[i].insert(operand);
                 }
             }
         }
@@ -278,7 +289,8 @@ namespace tiny::t86 {
 
         std::unordered_map<Operand*, Reg, OperandHash, OperandEqual> operandToRegMap_;  // Map of operands to registers
         std::unordered_set<Operand*, OperandHash, OperandEqual> memoryOperands_; // Set of operands which are in memory
-        std::unordered_map<Operand *, std::vector<std::pair<Instruction *, unsigned long>>> defUseChain_;
+        std::unordered_map<size_t, std::set<Operand*, OperandEqual>> liveness;
+        // TODO represent free regs just with a simple counter
         std::set<size_t> freeRegs_;
         Program &p_;
     };
