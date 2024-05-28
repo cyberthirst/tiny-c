@@ -119,7 +119,7 @@ namespace tiny::t86 {
         }
 
 
-        RndRegAllocator(Program &program, size_t numFreeRegs) : p_(program) {
+        LocalRegAllocator(Program &program, size_t numFreeRegs) : p_(program) {
             for (size_t i = 1; i <= numFreeRegs; ++i) {
                 freeRegs_.insert(i);
             }
@@ -136,6 +136,7 @@ namespace tiny::t86 {
 
                 const auto& instruction = instructions[i];
                 // for MOVs, we set the source as live, and remove the destination from live
+                // TODO arithmetic instructions also invalidate the destination (and possibly also other insns)
                 if (dynamic_cast<MOVIns*>(instruction.get()) != nullptr) {
                     auto target = instruction->getOperands()[0];
                     auto source = instruction->getOperands()[1];
@@ -174,18 +175,17 @@ namespace tiny::t86 {
             // 3. we need to add the reg
         }
 
-        bool isLastUse(Instruction *instr, Operand* operand) {
+        bool isLastUse(Operand* operand, size_t i) {
             //for BP and SP we don't care about the last use
             if (isBPorSP(operand))
                 return false;
 
-            auto &uses = defUseChain_[operand];
+            for (size_t j = i + 1; j < liveness.size(); ++j) {
+                if (liveness[j].find(operand) != liveness[j].end())
+                    return false;
+            }
 
-            // Check if the instruction 'instr' is the last element in the vector of uses.
-            // The instruction pointer and the index (i) of the operand should match.
-            return std::find_if(uses.rbegin(), uses.rend(), [&](const auto &pair) {
-                return pair.first == instr;
-            }) == uses.rbegin();
+            return true;
         }
 
         struct OperandHash {
@@ -219,71 +219,75 @@ namespace tiny::t86 {
             return false;
         }
 
+        void updateLivenessAndInsns(BasicBlock *b, size_t i, Operand *original, Operand *replacement) {
+            // update all the instructions that use the original operand
+            for (auto it = b->getInstructions().begin() + i; it != b->getInstructions().end(); ++it) {
+
+            }
+
+            // update the liveness of the original operand
+            // - remove the original operand from the liveness set and add the replacement
+        }
+
         void allocate(BasicBlock *b) {
             for (auto it = b->getInstructions().begin(); it != b->getInstructions().end(); ++it) {
                 Instruction *i = it->get();
 
-                auto operands = i->getOperands();
-                for (size_t index = 0; index < operands.size(); ++index) {
-                    Operand* o = operands[index];
-                    if (memoryOperands_.find(o) != memoryOperands_.end()) {
+                if (dynamic_cast<MOVIns*>(i) != nullptr) {
+                    auto operands = i->getOperands();
+                    auto target = operands[0];
+                    auto source = operands[1];
+                    // source isn't in a register
+                    if (operandToRegMap_.find(source) == operandToRegMap_.end()) {
                         Reg r = allocate();
 
-                        //we moved the operand from memory to register, so we update the structure accordingly
-                        operandToRegMap_[o] = r;
-                        memoryOperands_.erase(o);
+                        //we allocated a register for the operand, update the mapping
+                        operandToRegMap_[source] = r;
 
                         auto newOp = new RegOp(r);
-                        // operand is in memory, so we need to load it into a register
-                        auto moveInstr = std::make_unique<MOVIns>(newOp, o);
-                        *operands[index] = newOp;
 
-                        // insert MOV instruction into the basic block
-                        // currently this is very stupid & inefficient the insert has O(n) complexity, using it for simplicity
-                        it = b->getInstructions().insert(it, std::move(moveInstr));
-
-                        // Since we inserted a new instruction, the iterator positions have changed.
-                        // We need to increment 'it' to point to the original instruction.
-                        ++it;
+                        // update the MOV with the new operand
+                        MOVIns *mov = dynamic_cast<MOVIns *>(i);
+                        mov->operand2_ = newOp;
                     }
+                        // source is in a register -> eliminate the MOV
+                    else {
+                        // we don't need to do anything, the source is already in a register
+                        // so rewrite to NOP
+                        NOPIns *nop = new NOPIns();
+                        *it = std::unique_ptr<Instruction>(nop);
+                    }
+                    continue;
                 }
 
-                // If it is the last use of an operand, release the register
-                /*for (Operand* o : i->getOperands()) {
-                    if (isLastUse(i, o)) {
-                        //if the operand is in a register, we can free it as it won't be used anymore
-                        //TODO the def-use chain probably operates on the abstract registers so if we pass here
-                        // a physical one it will not be found and thus incorrectly freed
-                        if (operandToRegMap_.find(o) != operandToRegMap_.end()) {
+                // We know that the operandToRegMap_ must contain the operands of the instruction
+                // because they must have been preceeded by a MOV instruction
+                // But they still use the original operands, so we need to remap them to the physical register
+                // operands
+                BinaryIns *binary = dynamic_cast<BinaryIns *>(i);
+                if (binary != nullptr) {
+                    std::vector<Operand *> originalOperands = binary->getOperands();
+                    Reg &r1 = operandToRegMap_[i->getOperands()[0]];
+                    Reg &r2 = operandToRegMap_[i->getOperands()[1]];
+
+                    binary->operand1_ = new RegOp(r1);
+                    binary->operand2_ = new RegOp(r2);
+
+
+                    // If it is the last use of an operand, release the register
+                    // Additionally, if the operand is in memory, we need to spill it
+                    for (Operand *o: originalOperands) {
+                        if (isLastUse(o, it - b->getInstructions().begin())) {
                             freeRegs_.insert(operandToRegMap_[o].index());
                             operandToRegMap_.erase(o);
-                            //we don't need to add the operand to the memoryOperands_ set, as it won't be used anymore
+                            // If the operand is in memory, we need to spill it
+                            MemRegOffsetOp *mem = dynamic_cast<MemRegOffsetOp *>(o);
+                            if (mem != nullptr) {
+                                // TODO spill the operand
+                            }
                         }
                     }
-                }*/
-
-                // if we are defining a value, we need to allocate a register for it
-                /*auto mov = dynamic_cast<MOVIns*>(i);
-                if (mov != nullptr ) {
-                    //we don't care about the BP and SP registers
-                    //we don't need to perform any allocation for them
-                    if (isBPorSP(mov->operand1_)) {
-                        continue;
-                    }
-                    //we want to allocate the register only if the source register is not already allocated
-                    auto r = findReg(mov->operand2_);
-                    if (r != nullptr) {
-                        //if the source is already allocated, we just update the destination to point to the same register
-                        operandToRegMap_[mov->operand1_] = *r;
-                    }
-                    else {
-                        Reg r = allocate();
-                        //update the abstract register with the physical register
-                        mov->operand1_ = new RegOp(r);
-                        //map the source operand to the register
-                        operandToRegMap_[mov->operand2_] = r;
-                    }
-                }*/
+                }
             }
         }
 
@@ -294,4 +298,6 @@ namespace tiny::t86 {
         std::set<size_t> freeRegs_;
         Program &p_;
     };
+
+
 }
