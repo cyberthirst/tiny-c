@@ -16,7 +16,8 @@ namespace tiny::t86 {
             GP,
         };
 
-        Reg(Type type, int index) : type_(type), index_(index) {}
+        Reg(Type type, int index) : type_(type), index_(index), physical_(false) {}
+        Reg(Type type, int index, bool physical) : type_(type), index_(index), physical_(physical) {}
 
         Reg() {}
 
@@ -40,12 +41,26 @@ namespace tiny::t86 {
         bool operator==(const Reg& other) const {
             // replace these with actual comparison logic based on your Reg definition
             // this is just an example
-            return this->type() == other.type() && this->index() == other.index();
+            return this->type() == other.type() && this->index() == other.index() && this->physical() == other.physical();
+        }
+
+        bool physical() const {
+            if (type_ == Type::SP || type_ == Type::BP) {
+                return true;
+            }
+
+            return physical_;
+        }
+
+        void setPhysical(int index) {
+            physical_ = true;
+            index_ = index;
         }
 
     private:
         Type type_;
         int index_;
+        bool physical_;
     };
 
 

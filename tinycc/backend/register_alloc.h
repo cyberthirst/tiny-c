@@ -91,6 +91,7 @@ namespace tiny::t86 {
                 //allocate physical regs for each basic block
                 for (auto &bb: basicBlocks) {
                     a.init(bb.get());
+                    std::cout << "Starting allocation for block " << bb->name << std::endl;
                     a.allocate(bb.get());
                     a.deinit();
                 }
@@ -103,12 +104,12 @@ namespace tiny::t86 {
 
         void deinit() {
             liveness.clear();
-            freeRegs_.clear();
+            assert(freeRegs_.size() == numFreeRegs_);
             operandToRegMap_.clear();
         }
 
 
-        BeladyRegAllocator(Program &program, size_t numFreeRegs) : p_(program) {
+        BeladyRegAllocator(Program &program, size_t numFreeRegs) : p_(program), numFreeRegs_(numFreeRegs) {
             for (size_t i = 1; i <= numFreeRegs; ++i) {
                 freeRegs_.insert(i);
             }
@@ -160,7 +161,7 @@ namespace tiny::t86 {
 
             size_t regId = *freeRegs_.begin();
             freeRegs_.erase(freeRegs_.begin());
-            return Reg(Reg::Type::GP, regId);
+            return Reg(Reg::Type::GP, regId, true);
         }
 
         void spillRegister() {
@@ -168,6 +169,7 @@ namespace tiny::t86 {
             assert(curInsIndex < liveness.size());
 
             std::unordered_map<Operand*, Reg, OperandHash, OperandEqual> live = operandToRegMap_;
+            assert(!live.empty());
             Operand * toSpill = nullptr;
 
 
@@ -250,39 +252,37 @@ namespace tiny::t86 {
                     // source isn't in a register
                     if (operandToRegMap_.find(source) == operandToRegMap_.end()) {
                         Reg r = allocate();
+                        assert(r.physical());
+
+                        RegOp *targetOp = dynamic_cast<RegOp*>(target);
+                        assert(targetOp != nullptr);
+                        assert(!targetOp->reg_.physical());
 
                         //we allocated a register for the operand, update the mapping
                         operandToRegMap_[source] = r;
 
-                        auto newOp = new RegOp(r);
-
-                        // update the MOV with the new operand
-                        MOVIns *mov = dynamic_cast<MOVIns *>(i);
-                        mov->operand2_ = newOp;
+                        targetOp->reg_ = r;
                     }
                         // source is in a register -> eliminate the MOV
                     else {
-                        // we don't need to do anything, the source is already in a register
-                        // so rewrite to NOP
-                        NOPIns *nop = new NOPIns();
-                        *it = std::unique_ptr<Instruction>(nop);
+                        // if source is in a register, target must be a physical register
+                        assert(operandToRegMap_[target].physical());
                     }
+                    std::cout << i->toString() << std::endl;
                     continue;
                 }
 
                 // We know that the operandToRegMap_ must contain the operands of the instruction
                 // because they must have been preceeded by a MOV instruction
-                // But they still use the original operands, so we need to remap them to the physical register
-                // operands
+                // Because we use pointers for operands the registers should be remapped to
+                // to physical automatically
                 BinaryIns *binary = dynamic_cast<BinaryIns *>(i);
                 if (binary != nullptr) {
                     std::vector<Operand *> originalOperands = binary->getOperands();
                     Reg &r1 = operandToRegMap_[i->getOperands()[0]];
+                    assert(r1.physical());
                     Reg &r2 = operandToRegMap_[i->getOperands()[1]];
-
-                    binary->operand1_ = new RegOp(r1);
-                    binary->operand2_ = new RegOp(r2);
-
+                    assert(r2.physical());
 
                     // If it is the last use of an operand, release the register
                     // Additionally, if the operand is in memory, we need to spill it
@@ -290,14 +290,13 @@ namespace tiny::t86 {
                         if (isLastUse(o, it - b->getInstructions().begin())) {
                             freeRegs_.insert(operandToRegMap_[o].index());
                             operandToRegMap_.erase(o);
-                            // If the operand is in memory, we need to spill it
-                            auto *mem = dynamic_cast<MemRegOffsetOp *>(o);
-                            if (mem != nullptr) {
-                                // TODO spill the operand
-                            }
+                            // TODO
+                            // If the operand is a register (and it's the last use), we should spill it
+                            // although the spill should likely be done only for stack variables
                         }
                     }
                 }
+                std::cout << i->toString() << std::endl;
             }
         }
 
@@ -306,7 +305,8 @@ namespace tiny::t86 {
         std::unordered_map<Operand*, Reg, OperandHash, OperandEqual> operandToRegMap_;  // Map of operands to registers
         std::unordered_map<size_t, std::set<Operand*, OperandEqual>> liveness;
         // TODO represent free regs just with a simple counter
-        std::set<size_t> freeRegs_;
+        std::set<int> freeRegs_;
+        size_t numFreeRegs_;
         Program &p_;
     };
 
