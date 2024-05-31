@@ -120,7 +120,7 @@ bool compile(std::string const & contents, Test const * test, TestResult *result
         if (!testASMProgram(t86Program, test))
             return false;
         // register allocation
-        t86::RndRegAllocator::allocatePhysicalRegs(t86Program, Options::numRegisters);
+        t86::BeladyRegAllocator::allocatePhysicalRegs(t86Program, Options::numRegisters);
         if (!testASMProgram(t86Program, test))
             return false;
 
