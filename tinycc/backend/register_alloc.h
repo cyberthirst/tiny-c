@@ -212,7 +212,7 @@ namespace tiny::t86 {
 
         bool isLastUse(Operand* operand, size_t i) {
             //for BP and SP we don't care about the last use
-            if (isBPorSP(operand))
+            if (isSpecialReg(operand))
                 return false;
 
             for (size_t j = i + 1; j < liveness.size(); ++j) {
@@ -236,12 +236,21 @@ namespace tiny::t86 {
         };
 
 
-        bool isBPorSP(Operand* operand) {
+        bool isSpecialReg(Operand* operand) {
             auto reg = dynamic_cast<RegOp*>(operand);
-            if (reg != nullptr && (reg->reg_ == getBP() || reg->reg_ == SP)) {
+            if (reg != nullptr && (reg->reg_ == getBP() || reg->reg_ == getSP() || reg->reg_ == getEAX())) {
+                assert(reg->reg_.physical());
                 return true;
             }
             return false;
+        }
+
+        void printOperandToRegMap() {
+            std::cout << "->->->->->->->->->->" << std::endl;
+            for (const auto& [operand, reg] : operandToRegMap_) {
+                std::cout << operand->toString() << " -> " << reg.toString() << std::endl;
+            }
+            std::cout << "<-<-<-<-<-<-<-<-<-<-<-" << std::endl;
         }
 
 
@@ -251,6 +260,8 @@ namespace tiny::t86 {
             auto &instructions = b->getInstructions();
             for (curInsIndex = 0; curInsIndex < instructions.size(); ++curInsIndex) {
                 Instruction *i = instructions[curInsIndex].get();
+                //std::cout << "Processing instruction " << i->toString() << std::endl;
+                //printOperandToRegMap();
 
                 // last instruction in the block
                 if (curInsIndex + 1 == instructions.size()) {
@@ -275,18 +286,21 @@ namespace tiny::t86 {
                     auto target = mov->operand1_;
                     auto source = mov->operand2_;
 
-                    if (isBPorSP(target) || isBPorSP(source)) {
+                    if (isSpecialReg(target) || isSpecialReg(source)) {
                         for (Operand *o: operands) {
-                            if (isBPorSP(o)) {
+                            if (isSpecialReg(o)) {
                                 auto reg = dynamic_cast<RegOp*>(o);
                                 operandToRegMap_[o] = reg->reg_;
+                                if (reg->reg_ == getEAX()){
+                                    assert(operandToRegMap_.find(source) != operandToRegMap_.end());
+                                    mov->operand2_ = new RegOp(operandToRegMap_[source]);
+                                }
                             }
                         }
                         std::cout << i->toString() << std::endl;
                         continue;
                     }
 
-                    // source isn't in a register
                     else if (operandToRegMap_.find(source) == operandToRegMap_.end()) {
                         Reg r = allocate();
                         assert(r.physical());
@@ -310,21 +324,30 @@ namespace tiny::t86 {
                             // TODO this is little sus
                             // maybe we should check if operand is either mapped or its a physical register?
                             operandToRegMap_[target] = r;
-
-                            targetOp->reg_ = r;
+                            mov->operand1_ = new RegOp(r);
                         }
                     }
-                    else {
+                    else { //source is in register
                         auto memOp = dynamic_cast<MemRegOffsetOp*>(target);
                         // target is memory and source is in a register
                         // do the optimization to replace the MOV with NOP
-                        if (memOp != nullptr) {
+                        if (memOp != nullptr) { // target is memory, thus we replace the MOV with NOP
+                            operandToRegMap_[target] = operandToRegMap_[source];
                             auto nop = new NOPIns();
                             currentBlock_->getInstructions()[curInsIndex] = std::unique_ptr<Instruction>(nop);
                             i = nop; // just for printing purposes
                         }
+                        // target is in register
+                        // in this case the source can be in more than one register (bc we map it to another register)
+                        // but we still map it only to one register, this might be problematic
                         else {
-                            // if source is in a register, target must be a physical register
+                            if (operandToRegMap_.find(target) == operandToRegMap_.end()){
+                                Reg r = allocate();
+                                assert(r.physical());
+                                operandToRegMap_[target] = r;
+                                mov->operand1_ = new RegOp(r);
+                            }
+                            mov->operand2_ = new RegOp(operandToRegMap_[source]);
                             assert(operandToRegMap_[target].physical());
                         }
                     }
