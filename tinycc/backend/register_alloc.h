@@ -105,17 +105,8 @@ namespace tiny::t86 {
         void deinit() {
             liveness.clear();
             assert(freeRegs_.size() == numFreeRegs_);
-            verifyOperandToRegMap();
             operandToRegMap_.clear();
         }
-
-        void verifyOperandToRegMap() {
-            // only BP and SP can remain in the map
-            for (const auto& [op, reg] : operandToRegMap_) {
-                assert(isBPorSP(op));
-            }
-        }
-
 
         BeladyRegAllocator(Program &program, size_t numFreeRegs) : p_(program), numFreeRegs_(numFreeRegs) {
             for (size_t i = 1; i <= numFreeRegs; ++i) {
@@ -183,6 +174,10 @@ namespace tiny::t86 {
 
             std::cout << instructions[curInsIndex]->toString() << std::endl;
             curInsIndex++;
+
+            // Free the register
+            freeRegs_.insert(operandToRegMap_[toSpill].index());
+            operandToRegMap_.erase(toSpill);
         }
 
         void spillRegister() {
@@ -213,10 +208,6 @@ namespace tiny::t86 {
             // Spill the register
             // temporary solution assumes that the operand to be spilled corresponds to a stack variable
             spillHelper(toSpill);
-
-            // Free the register
-            freeRegs_.insert(operandToRegMap_[toSpill].index());
-            operandToRegMap_.erase(toSpill);
         }
 
         bool isLastUse(Operand* operand, size_t i) {
@@ -257,14 +248,32 @@ namespace tiny::t86 {
         void allocate(BasicBlock *b) {
             currentBlock_ = b;
             assert(operandToRegMap_.empty());
-            for (auto it = b->getInstructions().begin(); it != b->getInstructions().end(); ++it) {
-                curInsIndex = it - b->getInstructions().begin();
-                Instruction *i = it->get();
+            auto &instructions = b->getInstructions();
+            for (curInsIndex = 0; curInsIndex < instructions.size(); ++curInsIndex) {
+                Instruction *i = instructions[curInsIndex].get();
 
-                if (dynamic_cast<MOVIns*>(i) != nullptr) {
-                    auto operands = i->getOperands();
-                    auto target = operands[0];
-                    auto source = operands[1];
+                // last instruction in the block
+                if (curInsIndex + 1 == instructions.size()) {
+                    assert(dynamic_cast<NoOpIns*>(i) != nullptr || dynamic_cast<JumpIns*>(i) != nullptr);
+
+                    for (auto it = operandToRegMap_.begin(); it != operandToRegMap_.end();) {
+                        auto *memOp = dynamic_cast<MemRegOffsetOp*>(it->first);
+                        if (memOp != nullptr) {
+                            auto currentIt = it; // store current iterator
+                            ++it; // move iterator to next element before potential modification
+                            spillHelper(currentIt->first);
+                        } else {
+                            ++it;
+                        }
+                    }
+
+                }
+
+                auto mov = dynamic_cast<MOVIns*>(i);
+                if (mov != nullptr) {
+                    auto operands = mov->getOperands();
+                    auto target = mov->operand1_;
+                    auto source = mov->operand2_;
 
                     if (isBPorSP(target) || isBPorSP(source)) {
                         for (Operand *o: operands) {
@@ -277,29 +286,33 @@ namespace tiny::t86 {
                         continue;
                     }
 
-                    // source is immediate and target is MemRegOffset - initializing the memory
-                    if (dynamic_cast<ImmOp*>(source) != nullptr
-                        && dynamic_cast<MemRegOffsetOp*>(target) != nullptr) {
-                        std::cout << i->toString() << std::endl;
-                        continue;
-                    }
-
                     // source isn't in a register
                     else if (operandToRegMap_.find(source) == operandToRegMap_.end()) {
                         Reg r = allocate();
                         assert(r.physical());
 
-                        RegOp *targetOp = dynamic_cast<RegOp*>(target);
-                        assert(targetOp != nullptr);
-                        assert(!targetOp->reg_.physical());
+                        auto targetMem = dynamic_cast<MemRegOffsetOp*>(target);
+                        if (targetMem != nullptr) {
+                            // replace the memory operand with a register operand
+                            // and map the memory operand to the register
+                            operandToRegMap_[source] = r;
+                            operandToRegMap_[target] = r;
+                            mov->operand1_ = new RegOp(r);
 
-                        //we allocated a register for the operand, update the mapping
-                        operandToRegMap_[source] = r;
-                        // TODO this is little sus
-                        // maybe we should check if operand is either mapped or its a physical register?
-                        operandToRegMap_[target] = r;
+                        }
+                        else {
+                            RegOp *targetOp = dynamic_cast<RegOp *>(target);
+                            assert(targetOp != nullptr);
+                            assert(!targetOp->reg_.physical());
 
-                        targetOp->reg_ = r;
+                            //we allocated a register for the operand, update the mapping
+                            operandToRegMap_[source] = r;
+                            // TODO this is little sus
+                            // maybe we should check if operand is either mapped or its a physical register?
+                            operandToRegMap_[target] = r;
+
+                            targetOp->reg_ = r;
+                        }
                     }
                     else {
                         auto memOp = dynamic_cast<MemRegOffsetOp*>(target);
@@ -338,8 +351,9 @@ namespace tiny::t86 {
 
                     // At this point we know both operands are in registers
                     // So if it is the last use of an operand, release the register
+                    // This is basically just an optimization, not necessary part of the algorithm
                     for (Operand *o: originalOperands) {
-                        if (isLastUse(o, it - b->getInstructions().begin())) {
+                        if (isLastUse(o, curInsIndex)) {
                             // If the operand is a register (and it's the last use), we should spill it
                             // although the spill should likely be done only for stack variables
                             if (dynamic_cast<MemRegOffsetOp *>(o) != nullptr){
@@ -354,6 +368,7 @@ namespace tiny::t86 {
                 }
                 std::cout << i->toString() << std::endl;
             }
+
         }
 
         BasicBlock *currentBlock_;
