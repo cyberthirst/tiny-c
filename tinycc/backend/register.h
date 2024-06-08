@@ -46,7 +46,7 @@ namespace tiny::t86 {
 
         bool physical() const {
             if (type_ == Type::SP || type_ == Type::BP) {
-                return true;
+                assert(physical_);
             }
 
             return physical_;

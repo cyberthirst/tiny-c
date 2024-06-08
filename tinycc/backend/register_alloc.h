@@ -21,11 +21,11 @@ namespace tiny::t86 {
         // allocates a free register on demand
         virtual Reg allocate() = 0;
 
-        const Reg &getSP() const { return SP; }
+        const Reg &getSP() const { assert(SP.physical()); return SP; }
 
-        const Reg &getBP() const { return BP; }
+        const Reg &getBP() const { assert(BP.physical()); return BP; }
 
-        const Reg &getEAX() const { return EAX; }
+        const Reg &getEAX() const { assert(EAX.physical()); return EAX; }
 
     protected:
         Reg SP;  // Stack Pointer register
@@ -93,6 +93,7 @@ namespace tiny::t86 {
                     a.init(bb.get());
                     std::cout << "Starting allocation for block " << bb->name << std::endl;
                     a.allocate(bb.get());
+                    a.printFreeRegs();
                     a.deinit();
                 }
             }
@@ -152,6 +153,14 @@ namespace tiny::t86 {
             }
         }
 
+        void printFreeRegs() {
+            std::cout << "Free registers: ";
+            for (auto it : freeRegs_) {
+                std::cout << it << " ";
+            }
+            std::cout << std::endl;
+        }
+
         Reg allocate() override {
             // If there are no free registers, spill one
             if (freeRegs_.empty()) {
@@ -176,7 +185,7 @@ namespace tiny::t86 {
             curInsIndex++;
 
             // Free the register
-            freeRegs_.insert(operandToRegMap_[toSpill].index());
+            insertFreeReg(operandToRegMap_[toSpill]);
             operandToRegMap_.erase(toSpill);
         }
 
@@ -212,7 +221,7 @@ namespace tiny::t86 {
 
         bool isLastUse(Operand* operand, size_t i) {
             //for BP and SP we don't care about the last use
-            if (isSpecialReg(operand))
+            if (isSpecialRegOperand(operand))
                 return false;
 
             for (size_t j = i + 1; j < liveness.size(); ++j) {
@@ -235,10 +244,14 @@ namespace tiny::t86 {
             }
         };
 
+        bool isSpecialReg(Reg r) {
+            return r == getBP() || r == getSP() || r == getEAX();
+        }
 
-        bool isSpecialReg(Operand* operand) {
+
+        bool isSpecialRegOperand(Operand* operand) {
             auto reg = dynamic_cast<RegOp*>(operand);
-            if (reg != nullptr && (reg->reg_ == getBP() || reg->reg_ == getSP() || reg->reg_ == getEAX())) {
+            if (reg != nullptr && isSpecialReg(reg->reg_)) {
                 assert(reg->reg_.physical());
                 return true;
             }
@@ -253,6 +266,38 @@ namespace tiny::t86 {
             std::cout << "<-<-<-<-<-<-<-<-<-<-<-" << std::endl;
         }
 
+        void insertFreeReg(Reg r) {
+            assert(r.physical());
+            assert(!isSpecialReg(r));
+            //assert(freeRegs_.find(r.index()) == freeRegs_.end());
+            freeRegs_.insert(r.index());
+        }
+
+        void finalizeBB() {
+            std::cout << "entering finalize" << std::endl;
+            printFreeRegs();
+            for (auto it = operandToRegMap_.begin(); it != operandToRegMap_.end();) {
+                auto *memOp = dynamic_cast<MemRegOffsetOp*>(it->first);
+                if (memOp != nullptr) {
+                    auto currentIt = it; // store current iterator
+                    ++it; // move iterator to next element before potential modification
+                    spillHelper(currentIt->first);
+                } else {
+                    auto reg = it->second;
+                    if (!isSpecialReg(reg)) insertFreeReg(reg);
+                    ++it;
+                }
+            }
+            printFreeRegs();
+            std::cout << "leaving finalize" << std::endl;
+        }
+
+        void physicalRegInvariant() {
+            for (const auto& [operand, reg] : operandToRegMap_) {
+                assert(reg.physical());
+            }
+        }
+
 
         void allocate(BasicBlock *b) {
             currentBlock_ = b;
@@ -260,24 +305,14 @@ namespace tiny::t86 {
             auto &instructions = b->getInstructions();
             for (curInsIndex = 0; curInsIndex < instructions.size(); ++curInsIndex) {
                 Instruction *i = instructions[curInsIndex].get();
-                //std::cout << "Processing instruction " << i->toString() << std::endl;
-                //printOperandToRegMap();
+                physicalRegInvariant();
+                std::cout << "Processing instruction " << i->toString() << std::endl;
+                printOperandToRegMap();
 
                 // last instruction in the block
                 if (curInsIndex + 1 == instructions.size()) {
                     assert(dynamic_cast<NoOpIns*>(i) != nullptr || dynamic_cast<JumpIns*>(i) != nullptr);
-
-                    for (auto it = operandToRegMap_.begin(); it != operandToRegMap_.end();) {
-                        auto *memOp = dynamic_cast<MemRegOffsetOp*>(it->first);
-                        if (memOp != nullptr) {
-                            auto currentIt = it; // store current iterator
-                            ++it; // move iterator to next element before potential modification
-                            spillHelper(currentIt->first);
-                        } else {
-                            ++it;
-                        }
-                    }
-
+                    finalizeBB();
                 }
 
                 auto mov = dynamic_cast<MOVIns*>(i);
@@ -286,9 +321,9 @@ namespace tiny::t86 {
                     auto target = mov->operand1_;
                     auto source = mov->operand2_;
 
-                    if (isSpecialReg(target) || isSpecialReg(source)) {
+                    if (isSpecialRegOperand(target) || isSpecialRegOperand(source)) {
                         for (Operand *o: operands) {
-                            if (isSpecialReg(o)) {
+                            if (isSpecialRegOperand(o)) {
                                 auto reg = dynamic_cast<RegOp*>(o);
                                 operandToRegMap_[o] = reg->reg_;
                                 if (reg->reg_ == getEAX()){
@@ -362,12 +397,12 @@ namespace tiny::t86 {
                     std::vector<Operand *> originalOperands = binary->getOperands();
                     auto target = originalOperands[0];
                     auto source = originalOperands[1];
-                    Reg &r1 = operandToRegMap_[target];
-                    assert(r1.physical());
-                    if (dynamic_cast<ImmOp*>(source) != nullptr) {
+                    if (dynamic_cast<ImmOp*>(source) != nullptr || isSpecialRegOperand(target)) {
                         std::cout << i->toString() << std::endl;
                         continue;
                     }
+                    Reg &r1 = operandToRegMap_[target];
+                    assert(r1.physical());
                     // not immediate -> it must be in a register
                     Reg &r2 = operandToRegMap_[source];
                     assert(r2.physical());
@@ -384,7 +419,7 @@ namespace tiny::t86 {
                                 spillHelper(o);
                             }
 
-                            freeRegs_.insert(operandToRegMap_[o].index());
+                            insertFreeReg(operandToRegMap_[o]);
                             operandToRegMap_.erase(o);
                         }
                     }
