@@ -93,7 +93,7 @@ namespace tiny::t86 {
                     a.init(bb.get());
                     std::cout << "Starting allocation for block " << bb->name << std::endl;
                     a.allocate(bb.get());
-                    a.printFreeRegs();
+                    //a.printFreeRegs();
                     a.deinit();
                 }
             }
@@ -276,8 +276,7 @@ namespace tiny::t86 {
         }
 
         void finalizeBB() {
-            std::cout << "entering finalize" << std::endl;
-            printFreeRegs();
+            //printFreeRegs();
             for (auto it = operandToRegMap_.begin(); it != operandToRegMap_.end();) {
                 auto *memOp = dynamic_cast<MemRegOffsetOp*>(it->first);
                 if (memOp != nullptr) {
@@ -290,14 +289,82 @@ namespace tiny::t86 {
                     ++it;
                 }
             }
-            printFreeRegs();
-            std::cout << "leaving finalize" << std::endl;
+            //printFreeRegs();
         }
 
         void physicalRegInvariant() {
             for (const auto& [operand, reg] : operandToRegMap_) {
                 assert(reg.physical());
             }
+        }
+
+        void changeMappingOfOperands(Reg oldReg, Reg newReg) {
+            for (auto& [operand, reg] : operandToRegMap_) {
+                if (reg == oldReg) {
+                    reg = newReg;
+                }
+            }
+        }
+
+        // Verify that the operands are in registers
+        // And if it is the last use of an operand, release the register
+        void remapOperands(BinaryIns *binary) {
+            // TODO if we write to target and it's not the last use of the target it might be necessary
+            // to spill the target
+
+            std::vector<Operand *> originalOperands = binary->getOperands();
+            auto target = originalOperands[0];
+            auto source = originalOperands[1];
+
+            auto targetRegOp = dynamic_cast<RegOp*>(target);
+            if (targetRegOp != nullptr) {
+                assert(operandToRegMap_.find(target) != operandToRegMap_.end());
+                assert(operandToRegMap_[target].physical());
+                // TODO move only if the target is not the last use
+                // binary operations overwrite the target
+                // but the target might be used in the future - so we need to move it
+                if (dynamic_cast<CMPIns*>(binary) == nullptr) {
+                    auto reg = allocate();
+                    assert(reg.physical());
+                    auto mov = new MOVIns(new RegOp(reg), new RegOp(operandToRegMap_[target]));
+                    insertInsBeforeCurrent(mov);
+                    changeMappingOfOperands(operandToRegMap_[target], reg);
+                    operandToRegMap_[target] = reg;
+
+                }
+                binary->operand1_ = new RegOp(operandToRegMap_[target]);
+            }
+
+            auto sourceRegOp = dynamic_cast<RegOp*>(source);
+            if (sourceRegOp != nullptr) {
+                // TODO make into a function
+                assert(operandToRegMap_.find(source) != operandToRegMap_.end());
+                assert(operandToRegMap_[source].physical());
+                binary->operand2_ = new RegOp(operandToRegMap_[source]);
+            }
+
+            for (Operand *o: originalOperands) {
+                if (isLastUse(o, curInsIndex)) {
+                    // If the operand is a register (and it's the last use), we should spill it
+                    // although the spill should likely be done only for stack variables
+                    if (dynamic_cast<MemRegOffsetOp *>(o) != nullptr) {
+                        assert(operandToRegMap_.find(o) != operandToRegMap_.end());
+                        // Spill
+                        spillHelper(o);
+                    }
+                    if (operandToRegMap_.find(o) != operandToRegMap_.end()) {
+                        insertFreeReg(operandToRegMap_[o]);
+                        operandToRegMap_.erase(o);
+                    }
+                }
+            }
+        }
+
+
+        NOPIns * replaceCurrentInsWithNOP() {
+            auto nop = new NOPIns();
+            currentBlock_->getInstructions()[curInsIndex] = std::unique_ptr<Instruction>(nop);
+            return nop;
         }
 
 
@@ -308,8 +375,8 @@ namespace tiny::t86 {
             for (curInsIndex = 0; curInsIndex < instructions.size(); ++curInsIndex) {
                 Instruction *i = instructions[curInsIndex].get();
                 physicalRegInvariant();
-                std::cout << "Processing instruction " << i->toString() << std::endl;
-                printOperandToRegMap();
+                //std::cout << "Processing instruction " << i->toString() << std::endl;
+                //printOperandToRegMap();
 
                 // last instruction in the block
                 if (curInsIndex + 1 == instructions.size()) {
@@ -323,6 +390,8 @@ namespace tiny::t86 {
                     auto target = mov->operand1_;
                     auto source = mov->operand2_;
 
+                    // for special registers like SP, BP, EAX we don't care about allocation and
+                    // use the instruction as is
                     if (isSpecialRegOperand(target) || isSpecialRegOperand(source)) {
                         for (Operand *o: operands) {
                             if (isSpecialRegOperand(o)) {
@@ -338,6 +407,7 @@ namespace tiny::t86 {
                         continue;
                     }
 
+                    // source is not in register
                     else if (operandToRegMap_.find(source) == operandToRegMap_.end()) {
                         Reg r = allocate();
                         assert(r.physical());
@@ -370,21 +440,23 @@ namespace tiny::t86 {
                         // do the optimization to replace the MOV with NOP
                         if (memOp != nullptr) { // target is memory, thus we replace the MOV with NOP
                             operandToRegMap_[target] = operandToRegMap_[source];
-                            auto nop = new NOPIns();
-                            currentBlock_->getInstructions()[curInsIndex] = std::unique_ptr<Instruction>(nop);
-                            i = nop; // just for printing purposes
+                            //auto nop = new NOPIns();
+                            //currentBlock_->getInstructions()[curInsIndex] = std::unique_ptr<Instruction>(nop);
+                            i = replaceCurrentInsWithNOP(); // assign is done just for printing purposes
                         }
-                        // target is in register
+                        // source is in register and target is a register
                         // in this case the source can be in more than one register (bc we map it to another register)
                         // but we still map it only to one register, this might be problematic
                         else {
-                            if (operandToRegMap_.find(target) == operandToRegMap_.end()){
-                                Reg r = allocate();
-                                assert(r.physical());
-                                operandToRegMap_[target] = r;
-                                mov->operand1_ = new RegOp(r);
-                            }
-                            mov->operand2_ = new RegOp(operandToRegMap_[source]);
+                            //if (operandToRegMap_.find(target) == operandToRegMap_.end()){
+                            //    Reg r = allocate();
+                            //    assert(r.physical());
+                            //    operandToRegMap_[target] = r;
+                            //    mov->operand1_ = new RegOp(r);
+                            //}
+                            operandToRegMap_[target] = operandToRegMap_[source];
+                            i = replaceCurrentInsWithNOP(); // assign is done just for printing purposes
+                            //mov->operand2_ = new RegOp(operandToRegMap_[source]);
                             assert(operandToRegMap_[target].physical());
                         }
                     }
@@ -392,40 +464,9 @@ namespace tiny::t86 {
                     continue;
                 }
 
-                // Verify that the operands are in registers
-                // And if it is the last use of an operand, release the register
                 BinaryIns *binary = dynamic_cast<BinaryIns *>(i);
-                if (binary != nullptr) {
-                    std::vector<Operand *> originalOperands = binary->getOperands();
-                    auto target = originalOperands[0];
-                    auto source = originalOperands[1];
-                    if (dynamic_cast<ImmOp*>(source) != nullptr || isSpecialRegOperand(target)) {
-                        std::cout << i->toString() << std::endl;
-                        continue;
-                    }
-                    Reg &r1 = operandToRegMap_[target];
-                    assert(r1.physical());
-                    // not immediate -> it must be in a register
-                    Reg &r2 = operandToRegMap_[source];
-                    assert(r2.physical());
-
-                    // At this point we know both operands are in registers
-                    // So if it is the last use of an operand, release the register
-                    // This is basically just an optimization, not necessary part of the algorithm
-                    for (Operand *o: originalOperands) {
-                        if (isLastUse(o, curInsIndex)) {
-                            // If the operand is a register (and it's the last use), we should spill it
-                            // although the spill should likely be done only for stack variables
-                            if (dynamic_cast<MemRegOffsetOp *>(o) != nullptr){
-                                // Spill
-                                spillHelper(o);
-                            }
-
-                            insertFreeReg(operandToRegMap_[o]);
-                            operandToRegMap_.erase(o);
-                        }
-                    }
-                }
+                if (binary != nullptr)
+                    remapOperands(binary);
                 std::cout << i->toString() << std::endl;
             }
 
