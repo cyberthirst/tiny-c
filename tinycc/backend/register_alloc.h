@@ -208,7 +208,6 @@ namespace tiny::t86 {
 
 
             // Find the operand that is used furthest in the future
-
             for (size_t j = curInsIndex + 1; j < liveness.size(); ++j) {
                 for (const auto& operand : liveness[j]) {
                     if (live.size() == 1) {
@@ -313,30 +312,39 @@ namespace tiny::t86 {
             }
         }
 
-        // Verify that the operands are in registers
-        // And if it is the last use of an operand, release the register
         void remapOperands(BinaryIns *binary) {
-            // TODO if we write to target and it's not the last use of the target it might be necessary
-            // to spill the target
-
             std::vector<Operand *> originalOperands = binary->getOperands();
             auto target = originalOperands[0];
             auto source = originalOperands[1];
 
             auto targetRegOp = dynamic_cast<RegOp*>(target);
-            if (targetRegOp != nullptr) {
+            if (targetRegOp != nullptr && !isSpecialReg(targetRegOp->reg_)) {
                 assert(operandToRegMap_.find(target) != operandToRegMap_.end());
                 assert(operandToRegMap_[target].physical());
-                // TODO move only if the target is not the last use
                 // binary operations overwrite the target
                 // but the target might be used in the future - so we need to move it
                 if (dynamic_cast<CMPIns*>(binary) == nullptr) {
-                    auto reg = allocate();
-                    assert(reg.physical());
-                    auto mov = new MOVIns(new RegOp(reg), new RegOp(operandToRegMap_[target]));
-                    insertInsBeforeCurrent(mov);
-                    changeMappingOfOperands(operandToRegMap_[target], reg);
-                    operandToRegMap_[target] = reg;
+                    // check if there exists an operand which maps to the same register as the target
+                    // and which is different from the target and which is not the last use
+                    // if such operand exists, we need to move it to a different register
+                    bool found = false;
+                    for (auto& [operand, reg] : operandToRegMap_) {
+                        if (operand != target) {
+                            if (reg == operandToRegMap_[target]) {
+                                if (!isLastUse(operand, curInsIndex)){
+                                    found = true;
+                                }
+                            }
+                        }
+                    }
+                    if (found) {
+                        auto reg = allocate();
+                        assert(reg.physical());
+                        auto mov = new MOVIns(new RegOp(reg), new RegOp(operandToRegMap_[target]));
+                        insertInsBeforeCurrent(mov);
+                        //changeMappingOfOperands(operandToRegMap_[target], reg);
+                        operandToRegMap_[target] = reg;
+                    }
 
                 }
                 binary->operand1_ = new RegOp(operandToRegMap_[target]);
@@ -350,21 +358,21 @@ namespace tiny::t86 {
                 binary->operand2_ = new RegOp(operandToRegMap_[source]);
             }
 
-            for (Operand *o: originalOperands) {
-                if (isLastUse(o, curInsIndex)) {
-                    // If the operand is a register (and it's the last use), we should spill it
-                    // although the spill should likely be done only for stack variables
-                    if (dynamic_cast<MemRegOffsetOp *>(o) != nullptr) {
-                        assert(operandToRegMap_.find(o) != operandToRegMap_.end());
-                        // Spill
-                        spillHelper(o);
-                    }
-                    if (operandToRegMap_.find(o) != operandToRegMap_.end()) {
-                        insertFreeReg(operandToRegMap_[o]);
-                        operandToRegMap_.erase(o);
-                    }
-                }
-            }
+            //for (Operand *o: originalOperands) {
+            //    if (isLastUse(o, curInsIndex)) {
+            //        // If the operand is a register (and it's the last use), we should spill it
+            //        // although the spill should likely be done only for stack variables
+            //        if (dynamic_cast<MemRegOffsetOp *>(o) != nullptr) {
+            //            assert(operandToRegMap_.find(o) != operandToRegMap_.end());
+            //            // Spill
+            //            spillHelper(o);
+            //        }
+            //        if (operandToRegMap_.find(o) != operandToRegMap_.end()) {
+            //            insertFreeReg(operandToRegMap_[o]);
+            //            operandToRegMap_.erase(o);
+            //        }
+            //    }
+            //}
         }
 
 
@@ -483,7 +491,6 @@ namespace tiny::t86 {
         size_t curInsIndex;
         std::unordered_map<Operand*, Reg, OperandHash, OperandEqual> operandToRegMap_;  // Map of operands to registers
         std::unordered_map<size_t, std::set<Operand*, OperandEqual>> liveness;
-        // TODO represent free regs just with a simple counter
         std::set<int> freeRegs_;
         size_t numFreeRegs_;
         Program &p_;
