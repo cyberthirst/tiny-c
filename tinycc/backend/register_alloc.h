@@ -172,17 +172,19 @@ namespace tiny::t86 {
             return Reg(Reg::Type::GP, regId, true);
         }
 
+        void insertInsBeforeCurrent(Instruction *ins) {
+            auto &instructions = currentBlock_->getInstructions();
+            instructions.insert(instructions.begin() + curInsIndex, std::unique_ptr<Instruction>(ins));
+            std::cout << instructions[curInsIndex]->toString() << std::endl;
+            curInsIndex++;
+        }
+
         void spillHelper(Operand *toSpill){
             auto *mem = dynamic_cast<MemRegOffsetOp*>(toSpill);
             assert(mem != nullptr);
             MOVIns *mov = new MOVIns(new MemRegOffsetOp(BP, mem->offset_),
                                      new RegOp(operandToRegMap_[toSpill]));
-            auto &instructions = currentBlock_->getInstructions();
-            instructions.insert(instructions.begin() + curInsIndex,
-                                std::unique_ptr<Instruction>(mov));
-
-            std::cout << instructions[curInsIndex]->toString() << std::endl;
-            curInsIndex++;
+            insertInsBeforeCurrent(mov);
 
             // Free the register
             insertFreeReg(operandToRegMap_[toSpill]);
