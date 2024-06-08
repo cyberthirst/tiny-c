@@ -116,11 +116,11 @@ bool compile(std::string const & contents, Test const * test, TestResult *result
             return false;
         // translate to target
         t86::Program t86Program = T86CodeGen::translateProgram(p);
-        Assembler::assemble(t86Program);
-        if (!testASMProgram(t86Program, test))
-            return false;
+
         // register allocation
         t86::BeladyRegAllocator::allocatePhysicalRegs(t86Program, Options::numRegisters);
+
+        Assembler::assemble(t86Program);
         if (!testASMProgram(t86Program, test))
             return false;
 
