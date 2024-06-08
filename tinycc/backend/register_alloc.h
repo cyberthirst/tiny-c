@@ -176,6 +176,13 @@ namespace tiny::t86 {
             auto &instructions = currentBlock_->getInstructions();
             instructions.insert(instructions.begin() + curInsIndex, std::unique_ptr<Instruction>(ins));
             std::cout << instructions[curInsIndex]->toString() << std::endl;
+            // we need to update liveness of subsequent instructions and liveness is mapping
+            // from instruction index to set of operands
+            for (size_t i = liveness.size(); i > curInsIndex; --i) {
+                liveness[i] = liveness[i - 1];
+            }
+            // update the liveness of the current instruction
+            liveness[curInsIndex] = liveness[curInsIndex + 1];
             curInsIndex++;
         }
 
