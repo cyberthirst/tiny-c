@@ -51,7 +51,7 @@ namespace tiny {
             Symbol gmain = Symbol{"global main"};
             f_ = p_.addFunction(gmain);
             bb_ = f_->addBasicBlock("entry");
-            (*this) += new t86::JMPIns(new t86::LabelOp("main"));
+            (*this) += new t86::CALLIns(new t86::LabelOp("main"));
             (*this) += new t86::PUTNUMIns(new t86::RegOp(regAllocator_.getEAX()));
             (*this) += new t86::HALTIns();
             leaveFunction();
