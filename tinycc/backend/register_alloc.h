@@ -94,6 +94,9 @@ namespace tiny::t86 {
                     std::cout << "Starting allocation for block " << bb->name << std::endl;
                     a.allocate(bb.get());
                     //a.printFreeRegs();
+                    // TODO add constant propagation
+                    // TODO remove unused registers
+                    // TODO remove spills if value wasn't modified after the initial load
                     a.deinit();
                 }
             }
@@ -357,22 +360,6 @@ namespace tiny::t86 {
                 assert(operandToRegMap_[source].physical());
                 binary->operand2_ = new RegOp(operandToRegMap_[source]);
             }
-
-            //for (Operand *o: originalOperands) {
-            //    if (isLastUse(o, curInsIndex)) {
-            //        // If the operand is a register (and it's the last use), we should spill it
-            //        // although the spill should likely be done only for stack variables
-            //        if (dynamic_cast<MemRegOffsetOp *>(o) != nullptr) {
-            //            assert(operandToRegMap_.find(o) != operandToRegMap_.end());
-            //            // Spill
-            //            spillHelper(o);
-            //        }
-            //        if (operandToRegMap_.find(o) != operandToRegMap_.end()) {
-            //            insertFreeReg(operandToRegMap_[o]);
-            //            operandToRegMap_.erase(o);
-            //        }
-            //    }
-            //}
         }
 
 
