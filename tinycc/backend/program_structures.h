@@ -43,6 +43,20 @@ namespace tiny::t86 {
         const std::vector<std::unique_ptr<Instruction>>& getInstructions() const { return insns_; }
         std::vector<std::unique_ptr<Instruction>>& getInstructions() { return insns_; }
 
+        static std::string makeUniqueName() {
+            return STR("bb" << nextUniqueId());
+        }
+
+        static std::string makeUniqueName(std::string const & from) {
+            return STR(from << nextUniqueId());
+        }
+
+        static size_t nextUniqueId() {
+            static size_t i = 0;
+            return i++;
+        }
+
+
     private:
 
         friend class Function;
@@ -55,20 +69,6 @@ namespace tiny::t86 {
                 s <<  (address != -1 ? std::to_string(address++) + " " : "") <<   i->toString() << "\n";
             }
             return s.str();
-        }
-
-
-        static std::string makeUniqueName() {
-            return STR("bb" << nextUniqueId());
-        }
-
-        static std::string makeUniqueName(std::string const & from) {
-            return STR(from << nextUniqueId());
-        }
-
-        static size_t nextUniqueId() {
-            static size_t i = 0;
-            return i++;
         }
 
         std::vector<std::unique_ptr<Instruction>> insns_;

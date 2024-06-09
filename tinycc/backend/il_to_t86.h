@@ -93,7 +93,7 @@ namespace tiny {
         }
 
         void generateCdeclPrologue(std::string const &target) {
-            bb_ = f_->addBasicBlock("prologue");
+            bb_ = f_->addBasicBlock(t86::BasicBlock::makeUniqueName("prologue"));
             // 1. save base pointer
             (*this) += new t86::PUSHIns(new t86::RegOp(regAllocator_.getBP()));
             // 2. set base pointer to stack pointer
@@ -125,7 +125,7 @@ namespace tiny {
         }
 
         void generateCdeclEpilogue() {
-            auto tmp = f_->addBasicBlock("epilogue");
+            auto tmp = f_->addBasicBlock(t86::BasicBlock::makeUniqueName("epilogue"));
             (*this) += new t86::JMPIns(new t86::LabelOp(tmp->name));
             bb_ = tmp;
             // cleanup the local variables
