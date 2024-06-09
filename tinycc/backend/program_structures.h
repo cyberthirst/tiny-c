@@ -48,14 +48,11 @@ namespace tiny::t86 {
         friend class Function;
         friend class Program;
 
-        std::string toString() const {
+        std::string toString(int &address) const {
             std::stringstream s;
-            s << "#bb: " << name << ":";
+            s << "#bb: " << name << ":" << "\n";
             for (auto & i : insns_) {
-                s << "\n";
-                //TODO print the instruction
-                //i->print(p);
-                s << i->toString();
+                s <<  (address != -1 ? std::to_string(address++) + " " : "") <<   i->toString() << "\n";
             }
             return s.str();
         }
@@ -107,11 +104,11 @@ namespace tiny::t86 {
 
         std::vector<std::unique_ptr<BasicBlock>>& getBasicBlocks() { return bbs_; }
 
-        std::string toString() const {
+        std::string toString(int &address) const {
             std::stringstream s;
             //TODO print args
             for (auto & bb : bbs_) {
-                s << bb->toString();
+                s << bb->toString(address);
             }
             return s.str();
         }
@@ -143,13 +140,14 @@ namespace tiny::t86 {
 
         std::vector<std::pair<Symbol, Function *>> &getFunctions() { return functions_; }
 
-        std::string toString() const {
+        std::string toString(bool withAddr) const {
             std::stringstream ss;
             ss << ".text" << "\n";
 
+            int address = withAddr ? 0 : -1;
             for (auto &f : functions_) {
                 ss << "#function: " << f.first << "\n";
-                ss << f.second->toString();
+                ss << f.second->toString(address);
             }
             ss << '\n';
             return ss.str();

@@ -56,7 +56,7 @@ std::string runVM(const t86::Program & program) {
     if (!tmpFile) {
         throw std::runtime_error("Could not open temp file for writing assembly code.");
     }
-    tmpFile << program.toString() << std::endl;
+    tmpFile << program.toString(false) << std::endl;
     tmpFile.close();
 
     std::string command = "t86-cli --register-cnt=100 " + tmpFilename;
@@ -85,7 +85,7 @@ bool testASMProgram(t86::Program const & p, Test const * test) {
     }
     std::string result = runVM(p);
     if (test->marked) {
-         std::cout << p.toString() << std::endl;
+         std::cout << p.toString(true) << std::endl;
         std::cout << "vm result: " << result << std::endl;
     }
     if (stoi(result) != test->result) {
