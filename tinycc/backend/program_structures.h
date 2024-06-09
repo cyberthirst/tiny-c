@@ -129,19 +129,24 @@ namespace tiny::t86 {
         ~Program() = default;
 
         Function * addFunction(Symbol name){
-            if (functions_.find(name) != functions_.end()) {
-                throw std::runtime_error(STR("function " << name << " already exists"));
+            // search the symbols and verify that the function does not exist
+            for (auto &f : functions_) {
+                if (f.first == name) {
+                    throw std::runtime_error(STR("function " << name << " already exists"));
+                }
             }
+
             Function * f = new Function{};
-            functions_.insert(std::make_pair(name, f));
+            functions_.emplace_back(name, f);
             return f;
         }
 
-        std::unordered_map<Symbol, Function *> &getFunctions() { return functions_; }
+        std::vector<std::pair<Symbol, Function *>> &getFunctions() { return functions_; }
 
         std::string toString() const {
             std::stringstream ss;
-            ss << emitStart();
+            ss << ".text" << "\n";
+
             for (auto &f : functions_) {
                 ss << "#function: " << f.first << "\n";
                 ss << f.second->toString();
@@ -150,18 +155,7 @@ namespace tiny::t86 {
             return ss.str();
         }
 
-        std::string emitStart() const {
-            std::stringstream ss;
-            ss << ".text" << "\n";
-            ss << "#.global main" << "\n";
-            //calls main, outputs the result and halts
-            //TODO make this code, not just a string
-            ss << "CALL 3\nPUTNUM R0\nHALT\n";
-            return ss.str();
-        }
-
-
     private:
-        std::unordered_map<Symbol, Function *> functions_;
+        std::vector<std::pair<Symbol, Function *>> functions_;
     };
 }

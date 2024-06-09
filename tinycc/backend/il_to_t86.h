@@ -47,7 +47,18 @@ namespace tiny {
             return lastResult_;
         }
 
+        void constructGlobalMain() {
+            Symbol gmain = Symbol{"global main"};
+            f_ = p_.addFunction(gmain);
+            bb_ = f_->addBasicBlock("entry");
+            (*this) += new t86::JMPIns(new t86::LabelOp("main"));
+            (*this) += new t86::PUTNUMIns(new t86::RegOp(regAllocator_.getEAX()));
+            (*this) += new t86::HALTIns();
+            leaveFunction();
+        }
+
         void generate(il::Program const &program) {
+            constructGlobalMain();
             Symbol main = Symbol{"main"};
             assert(program.getFunction(main) != nullptr && "main function not found");
             addFunToWorklist(main);

@@ -18,16 +18,9 @@ namespace tiny {
             a.assembleProgram(program);
         }
     private:
-        //3 is the size of the start function in instructions
-        // TODO very fragile, we should calculate this, however currently the start function
-        // is implemented as a simple string and thus it is hard to calculate
-        // rather implement the start function as a function (or atleast basic block) and calculate it's size
-        // programatically
-        Assembler() : sizeOfProgram(3) {}
+        Assembler() : sizeOfProgram(0) {}
         //calculates the addresses of the functions and basic blocks
         void firstPass(t86::Program &program) {
-            //TODO here we assume that the first iterated function is main, which is
-            //currently true, but is fragile and might change in the future
             for(auto& [funName, function] : program.getFunctions()) {
                 labelAddressMap[funName.name()] = sizeOfProgram;
                 for (auto &block : function->getBasicBlocks()) {
@@ -44,18 +37,14 @@ namespace tiny {
                 for (auto &block: basicBlocks) {
                     for (size_t i = 0; i < block->size(); i++) {
                         auto *ins = (*block)[i];
-                        //TODO might be better to use the opcode instead of dynamic_cast
-                        //opcodes aren't currently implemented
                         auto *jumpIns = dynamic_cast<t86::JumpIns *>(ins);
                         if (jumpIns) {
-                            //int address = labelAddressMap[jumpIns->lbl_->toString()];
                             int address = labelAddressMap.at(jumpIns->lbl_->toString());
                             jumpIns->patchLabel(address);
                         }
 
                         auto *callIns = dynamic_cast<t86::CALLIns *>(ins);
                         if (callIns) {
-                            //int address = labelAddressMap[callIns->lbl_->toString()];
                             int address = labelAddressMap.at(callIns->lbl_->toString());
                             callIns->patchLabel(address);
                         }
@@ -70,7 +59,7 @@ namespace tiny {
         }
 
         //size of the program in instructions
-        size_t sizeOfProgram = 3;
+        size_t sizeOfProgram;
         std::map<std::string, size_t> labelAddressMap;
     };
 }
