@@ -454,24 +454,18 @@ namespace tiny::t86 {
                         // target is memory and source is in a register
                         // do the optimization to replace the MOV with NOP
                         if (memOp != nullptr) { // target is memory, thus we replace the MOV with NOP
+                            if (operandToRegMap_.find(target) != operandToRegMap_.end())
+                                insertFreeReg(operandToRegMap_[target]);
                             operandToRegMap_[target] = operandToRegMap_[source];
-                            //auto nop = new NOPIns();
-                            //currentBlock_->getInstructions()[curInsIndex] = std::unique_ptr<Instruction>(nop);
                             i = replaceCurrentInsWithNOP(); // assign is done just for printing purposes
                         }
                         // source is in register and target is a register
                         // in this case the source can be in more than one register (bc we map it to another register)
                         // but we still map it only to one register, this might be problematic
                         else {
-                            //if (operandToRegMap_.find(target) == operandToRegMap_.end()){
-                            //    Reg r = allocate();
-                            //    assert(r.physical());
-                            //    operandToRegMap_[target] = r;
-                            //    mov->operand1_ = new RegOp(r);
-                            //}
                             operandToRegMap_[target] = operandToRegMap_[source];
+                            //operandToRegMap_[source] = operandToRegMap_[target];
                             i = replaceCurrentInsWithNOP(); // assign is done just for printing purposes
-                            //mov->operand2_ = new RegOp(operandToRegMap_[source]);
                             assert(operandToRegMap_[target].physical());
                         }
                     }
