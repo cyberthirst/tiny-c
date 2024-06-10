@@ -66,10 +66,15 @@ namespace tiny {
                 Symbol sfun = funWorklist_.front();
                 funWorklist_.pop();
                 enterFunction(sfun);
+                bool generatePrologue = true;
                 while (!bbWorklist_.empty()) {
                     il::BasicBlock *bb = bbWorklist_.front();
                     bb_ = f_->addBasicBlock(bb->name);
                     bbWorklist_.pop();
+                    if (generatePrologue) {
+                        generateCdeclPrologue();
+                        generatePrologue = false;
+                    }
                     for (auto const &instr: bb->getInstructions()) {
                         translate(instr.get());
                     }
@@ -92,8 +97,7 @@ namespace tiny {
             }
         }
 
-        void generateCdeclPrologue(std::string const &target) {
-            bb_ = f_->addBasicBlock(t86::BasicBlock::makeUniqueName("prologue"));
+        void generateCdeclPrologue() {
             // 1. save base pointer
             (*this) += new t86::PUSHIns(new t86::RegOp(regAllocator_.getBP()));
             // 2. set base pointer to stack pointer
@@ -121,7 +125,6 @@ namespace tiny {
                 addMOV(instr, new t86::RegOp(regAllocator_.allocate()),
                        new t86::MemRegOffsetOp(regAllocator_.getBP(), REG_TO_MEM_WORD + instr->value + 1));
             }
-            (*this) += new t86::JMPIns(new t86::LabelOp(target));
         }
 
         void generateCdeclEpilogue() {
@@ -144,7 +147,6 @@ namespace tiny {
             f_ = p_.addFunction(name);
             ilf_ = ilp_.getFunction(name);
             addBBToWorklist(ilp_.getFunction(name)->start());
-            generateCdeclPrologue(bbWorklist_.front()->name);
             return f_;
         }
 
