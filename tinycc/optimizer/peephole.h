@@ -11,21 +11,7 @@
 
 /*
  * patterns
- * MOV R1, 10
- * MOV [BP - 1], R1 <-- replace R1 with 10, could be useful when R1 is not used anymore (so
- *   in liveness analysis we can remove it)
- *
- *
- * MOV R1, R1
- *
- * MOV R1, [BP - 1]
- * MOV [BP - 1], R1 <-- replace with NOP
- *
- * MOV [BP - 1], 0 <-- replace with NOP (value is not used - it is overwritten in the next mov)
- * MOV [BP - 1], R2
- *
- *
- * JUMP target, where target is current instruction + 1
+ * //
  */
 
 namespace tiny {
@@ -55,6 +41,7 @@ namespace tiny {
                 instrIndex_++;
             }
 
+            totalInstrs_++;
             windowBBIndex_ = bbIndex_;
             windowInstrIndex_ = instrIndex_;
         }
@@ -122,6 +109,7 @@ namespace tiny {
         size_t windowInstrIndex_ = 0;
         size_t bbIndex_ = 0;
         size_t instrIndex_ = 0;
+        size_t totalInstrs_ = 0;
 
     };
 
@@ -153,6 +141,7 @@ namespace tiny {
             rules_.emplace_back([this] { return this->rule_removeAddSubZero(); });
             rules_.emplace_back([this] { return this->rule_removeNOP(); });
             rules_.emplace_back([this] { return this->rule_removeSelfCopy(); });
+            rules_.emplace_back([this] { return this->rule_removeUnusedMov(); });
         }
 
         void remove(size_t n, t86::Instruction *expected) {
@@ -199,6 +188,42 @@ namespace tiny {
             }
             return false;
         }
+
+
+        // removes unused consequent MOV instructions to the same target
+        // MOV [BP - 1], 0  <-- can be removed
+        // MOV [BP - 1], R2
+        bool rule_removeUnusedMov() {
+            auto i = getInstruction();
+            auto movIns = dynamic_cast<t86::MOVIns *>(i);
+            if (movIns == nullptr) return false;
+            auto target = movIns->operand1_;
+            auto next = getInstruction();
+            auto nextMovIns = dynamic_cast<t86::MOVIns *>(next);
+            if (nextMovIns == nullptr) return false;
+            if (nextMovIns->operand1_ == target) {
+                remove(0, i);
+            }
+            return false;
+        }
+
+        // removes cyclic MOV instructions
+        // MOV R1, [BP - 1]
+        // MOV [BP - 1], R1 <-- can be removed
+        bool rule_removeCyclicMov() {
+            auto i = getInstruction();
+            auto movIns = dynamic_cast<t86::MOVIns *>(i);
+            if (movIns == nullptr) return false;
+            auto source = movIns->operand2_;
+            auto next = getInstruction();
+            auto nextMovIns = dynamic_cast<t86::MOVIns *>(next);
+            if (nextMovIns == nullptr) return false;
+            if (nextMovIns->operand1_ == source) {
+                remove(1, i);
+            }
+            return false;
+        }
+
 
         std::vector<std::function<bool()>> rules_;
 
