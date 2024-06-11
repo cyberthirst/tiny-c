@@ -12,9 +12,7 @@ namespace tiny {
             BackendOptimizer opt;
             bool changed = false;
             do {
-                std::cout << program.toString(true) << std::endl;
-                changed |= PeepholeOptimizer::optimize(program);
-                std::cout << program.toString(true) << std::endl;
+                changed = false;
                 changed |= PeepholeOptimizer::optimize(program);
             } while (changed);
         }

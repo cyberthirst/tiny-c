@@ -15,7 +15,6 @@
  * MOV [BP - 1], R1 <-- replace R1 with 10, could be useful when R1 is not used anymore (so
  *   in liveness analysis we can remove it)
  *
- * ADD R1, 0
  *
  * MOV R1, R1
  *
@@ -25,7 +24,6 @@
  * MOV [BP - 1], 0 <-- replace with NOP (value is not used - it is overwritten in the next mov)
  * MOV [BP - 1], R2
  *
- * NOP
  *
  * JUMP target, where target is current instruction + 1
  */
@@ -49,12 +47,19 @@ namespace tiny {
             if (instrIndex_ + 1 >= bbs_->operator[](bbIndex_)->size()) {
                 instrIndex_ = 0;
                 bbIndex_++;
+                while (bbIndex_ < bbs_->size() && bbs_->operator[](bbIndex_)->size() == 0) {
+                    bbIndex_++;
+                }
             }
-            while (bbIndex_ < bbs_->size() && bbs_->operator[](bbIndex_)->size() == 0) {
-                bbIndex_++;
+            else {
+                instrIndex_++;
             }
-            instrIndex_++;
 
+            windowBBIndex_ = bbIndex_;
+            windowInstrIndex_ = instrIndex_;
+        }
+
+        void resetWindow() {
             windowBBIndex_ = bbIndex_;
             windowInstrIndex_ = instrIndex_;
         }
@@ -106,7 +111,7 @@ namespace tiny {
         }
 
         void print(){
-            std::cout << "bbIndex: " << bbIndex_ << " instrIndex: " << instrIndex_ << ": ";
+            std::cout << bbs_->operator[](bbIndex_)->name << ": " << "bbIndex: " << bbIndex_ << " instrIndex: " << instrIndex_ << ": ";
             auto bb = bbs_->operator[](bbIndex_).get();
             std::cout << bb->operator[](instrIndex_)->toString() << std::endl;
         }
@@ -130,15 +135,14 @@ namespace tiny {
 
             for (auto &f : program.getFunctions()) {
                 o.setFunction(f.second);
-                for (auto &rule : o.rules_) {
                     while (!o.isEnd()) {
-                        //o.print();
-                        if (rule()) {
-                            changed = true;
+                        for (auto &rule : o.rules_) {
+                            o.print();
+                            changed |= rule();
+                            o.resetWindow();
                         }
                         o.shift();
                     }
-                }
             }
 
             return changed;
@@ -146,8 +150,9 @@ namespace tiny {
 
     private:
         PeepholeOptimizer(t86::Program &p){
-            //rules_.emplace_back([this] { return this->rule_removeAddZero(); });
+            rules_.emplace_back([this] { return this->rule_removeAddSubZero(); });
             rules_.emplace_back([this] { return this->rule_removeNOP(); });
+            rules_.emplace_back([this] { return this->rule_removeSelfCopy(); });
         }
 
         void remove(size_t n, t86::Instruction *expected) {
@@ -155,12 +160,15 @@ namespace tiny {
             removeInstruction(bb, instr, expected);
         }
 
-
-        bool rule_removeAddZero() {
+        // removes patterns like: ADD R1, 0 or SUB R1, 0
+        bool rule_removeAddSubZero() {
             auto i = getInstruction();
             auto addIns = dynamic_cast<t86::ADDIns *>(i);
-            if (addIns == nullptr) return false;
-            auto source = addIns->operand2_;
+            auto subIns = dynamic_cast<t86::SUBIns *>(i);
+            if (addIns == nullptr && subIns == nullptr) return false;
+            auto binary = dynamic_cast<t86::BinaryIns *>(i);
+            assert(binary != nullptr);
+            auto source = binary->operand2_;
             auto imm = dynamic_cast<t86::ImmOp *>(source);
             if (imm == nullptr) return false;
             if (imm->value_ == 0) {
@@ -170,6 +178,7 @@ namespace tiny {
             return false;
         }
 
+        // removes NOP instructions
         bool rule_removeNOP() {
             auto i = getInstruction();
             auto nopIns = dynamic_cast<t86::NOPIns *>(i);
