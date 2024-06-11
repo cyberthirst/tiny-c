@@ -11,43 +11,20 @@
 
 namespace tiny::t86 {
 
-    class RegAllocator {
-    public:
-        RegAllocator()
-                : SP(Reg::Type::SP, INT_MAX, true),
-                  BP(Reg::Type::BP, INT_MAX - 1, true),
-                  EAX(Reg::Type::GP, 0, true) {}
-
-        // allocates a free register on demand
-        virtual Reg allocate() = 0;
-
-        const Reg &getSP() const { assert(SP.physical()); return SP; }
-
-        const Reg &getBP() const { assert(BP.physical()); return BP; }
-
-        const Reg &getEAX() const { assert(EAX.physical()); return EAX; }
-
-    protected:
-        Reg SP;  // Stack Pointer register
-        Reg BP;  // Base Pointer register
-        Reg EAX; // Return value register
-    };
-
 
 /*
  * Allocates abstract registers, ie ignores the limit set by the architecture.
  * Used during the instruction selection phase, the resulting target
  * code has to be further processed by a real register allocator.
  */
-    class AbstractRegAllocator : public RegAllocator {
+    class AbstractRegAllocator {
     public:
-        AbstractRegAllocator()
-                : RegAllocator() {
+        AbstractRegAllocator() {
             //we reserve the REG0 as EAX for return values
             nextRegIndex_ = 1; // General Purpose registers start from 1
         }
 
-        Reg allocate() override {
+        Reg allocate() {
             return Reg(Reg::Type::GP, nextRegIndex_++);
         }
 
@@ -82,7 +59,7 @@ namespace tiny::t86 {
  */
 
 
-    class BeladyRegAllocator : public RegAllocator {
+    class BeladyRegAllocator {
     public:
         static void allocatePhysicalRegs(Program &program, size_t numFreeRegs) {
             BeladyRegAllocator a(program, numFreeRegs);
@@ -91,7 +68,7 @@ namespace tiny::t86 {
                 //allocate physical regs for each basic block
                 for (auto &bb: basicBlocks) {
                     a.init(bb.get());
-                    std::cout << "Starting allocation for block " << bb->name << std::endl;
+                    //std::cout << "Starting allocation for block " << bb->name << std::endl;
                     a.allocate(bb.get());
                     //a.printFreeRegs();
                     // TODO add constant propagation
@@ -164,7 +141,7 @@ namespace tiny::t86 {
             std::cout << std::endl;
         }
 
-        Reg allocate() override {
+        Reg allocate() {
             // If there are no free registers, spill one
             if (freeRegs_.empty()) {
                 spillRegister();
@@ -254,11 +231,6 @@ namespace tiny::t86 {
                 return lhs->equals(rhs);
             }
         };
-
-        bool isSpecialReg(Reg r) {
-            return r == getBP() || r == getSP() || r == getEAX();
-        }
-
 
         bool isSpecialRegOperand(Operand* operand) {
             auto reg = dynamic_cast<RegOp*>(operand);
@@ -399,7 +371,7 @@ namespace tiny::t86 {
                             if (isSpecialRegOperand(o)) {
                                 auto reg = dynamic_cast<RegOp*>(o);
                                 operandToRegMap_[o] = reg->reg_;
-                                if (reg->reg_ == getEAX()){
+                                if (reg->reg_ == t86::EAX){
                                     assert(operandToRegMap_.find(source) != operandToRegMap_.end());
                                     mov->operand2_ = new RegOp(operandToRegMap_[source]);
                                 }

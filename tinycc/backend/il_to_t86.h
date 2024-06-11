@@ -52,7 +52,7 @@ namespace tiny {
             f_ = p_.addFunction(gmain);
             bb_ = f_->addBasicBlock("entry");
             (*this) += new t86::CALLIns(new t86::LabelOp("main"));
-            (*this) += new t86::PUTNUMIns(new t86::RegOp(regAllocator_.getEAX()));
+            (*this) += new t86::PUTNUMIns(new t86::RegOp(t86::EAX));
             (*this) += new t86::HALTIns();
             leaveFunction();
         }
@@ -99,13 +99,13 @@ namespace tiny {
 
         void generateCdeclPrologue() {
             // 1. save base pointer
-            (*this) += new t86::PUSHIns(new t86::RegOp(regAllocator_.getBP()));
+            (*this) += new t86::PUSHIns(new t86::RegOp(t86::BP));
             // 2. set base pointer to stack pointer
-            (*this) += new t86::MOVIns(new t86::RegOp(regAllocator_.getBP()),
-                                                     new t86::RegOp(regAllocator_.getSP()));
+            (*this) += new t86::MOVIns(new t86::RegOp(t86::BP),
+                                       new t86::RegOp(t86::SP));
             // 3. allocate stack space for local variables
             int stackSize = ilf_->getStackSize(true);
-            (*this) += new t86::SUBIns(new t86::RegOp(regAllocator_.getSP()),
+            (*this) += new t86::SUBIns(new t86::RegOp(t86::SP),
                                                      new t86::ImmOp(stackSize));
             //currently we have a primitive way of handling function arguments
             // - the caller pushes the arguments on the stack
@@ -123,7 +123,7 @@ namespace tiny {
                 //  RET ADDR <- BP + 1
                 //  OLD BP   <- BP, SP
                 addMOV(instr, new t86::RegOp(regAllocator_.allocate()),
-                       new t86::MemRegOffsetOp(regAllocator_.getBP(), REG_TO_MEM_WORD + instr->value + 1));
+                       new t86::MemRegOffsetOp(t86::BP, REG_TO_MEM_WORD + instr->value + 1));
             }
         }
 
@@ -133,10 +133,10 @@ namespace tiny {
             bb_ = tmp;
             // cleanup the local variables
             int stackSize = ilf_->getStackSize(true);
-            (*this) += new t86::ADDIns(new t86::RegOp(regAllocator_.getSP()),
+            (*this) += new t86::ADDIns(new t86::RegOp(t86::SP),
                                                      new t86::ImmOp(stackSize));
             // 1. restore base pointer
-            (*this) += new t86::POPIns(new t86::RegOp(regAllocator_.getBP()));
+            (*this) += new t86::POPIns(new t86::RegOp(t86::BP));
             // 2. return
             (*this) += new t86::RETIns();
             // the caller is responsible for cleaning up the arguments from the stack
@@ -178,7 +178,7 @@ namespace tiny {
                     //the alloca instruction is then accompanied by a store instruction,
                     //   - in ast_to_il we have: (*this) += ST(addr, arg);, the alloca represents the addr
                     //which initializes the variable to appropriate value
-                    addMOV(instr, new t86::MemRegOffsetOp(regAllocator_.getBP(), offset), new t86::ImmOp(0));
+                    addMOV(instr, new t86::MemRegOffsetOp(t86::BP, offset), new t86::ImmOp(0));
                     //TODO enable this assert
                     //assert(stackAllocator_.getStackSize() <= f_->getStackSize(true));
                     break;
@@ -203,7 +203,7 @@ namespace tiny {
             switch (instr->opcode) {
                 case il::Opcode::LD: {
                     addMOV(instr, new t86::RegOp(regAllocator_.allocate()),
-                                  new t86::MemRegOffsetOp(regAllocator_.getBP(), stackAllocator_.getOffset(instr->reg)));
+                                  new t86::MemRegOffsetOp(t86::BP, stackAllocator_.getOffset(instr->reg)));
                     break;
                 }
                 default:
@@ -255,7 +255,7 @@ namespace tiny {
                 }
                 case il::Opcode::ST: {
                     //1. load the address of the variable to be stored to
-                    t86::MemRegOffsetOp *dest = new t86::MemRegOffsetOp(regAllocator_.getBP(),
+                    t86::MemRegOffsetOp *dest = new t86::MemRegOffsetOp(t86::BP,
                                                               stackAllocator_.getOffset(instr->reg1));
                     //2. load the register containing the value to be stored
                     t86::RegOp *src = regMap_[instr->reg2];
@@ -296,7 +296,7 @@ namespace tiny {
             switch (instr->opcode) {
                 case il::Opcode::RETR: {
                     //we move the return value to the eax register
-                    addMOV(instr, new t86::RegOp(regAllocator_.getEAX()), regMap_[instr->reg]);
+                    addMOV(instr, new t86::RegOp(t86::EAX), regMap_[instr->reg]);
                     generateCdeclEpilogue();
                     break;
                 }
@@ -349,12 +349,12 @@ namespace tiny {
                     //TODO we assume constant size of the arguments
                     //this wouldn't work for structs, probably chars etc..
                     (*this) += new t86::ADDIns(
-                            new t86::RegOp(regAllocator_.getSP()),
+                            new t86::RegOp(t86::SP),
                             new t86::ImmOp(instr->regs.size())
                     );
                     addFunToWorklist(Symbol{sfun->value});
                     //associate the call instruction with the result register
-                    regMap_[instr] = new t86::RegOp{regAllocator_.getEAX()};
+                    regMap_[instr] = new t86::RegOp{t86::EAX};
                     break;
                 }
                 default:

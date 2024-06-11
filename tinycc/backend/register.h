@@ -8,6 +8,8 @@
 #include <climits> // for INT_MAX
 
 namespace tiny::t86 {
+
+
     class Reg {
     public:
         enum class Type {
@@ -63,5 +65,13 @@ namespace tiny::t86 {
         bool physical_;
     };
 
+    const Reg SP(Reg::Type::SP, INT_MAX, true);
+    const Reg BP(Reg::Type::BP, INT_MAX - 1, true);
+    const Reg EAX(Reg::Type::GP, 0, true);
+
+    bool isSpecialReg(Reg r) {
+        return r == BP || r == SP || r == EAX;
+
+    }
 
 }
