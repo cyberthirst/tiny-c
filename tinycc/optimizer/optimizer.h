@@ -2,19 +2,37 @@
 #include <cstdint>
 #include <unordered_map>
 #include "il.h"
+#include "peephole.h"
 
 namespace tiny {
 
-    class Optimizer {
+    class BackendOptimizer {
     public:
-        static void optimize(il::Program& program) {
-            Optimizer opt;
-            opt.removeRedundantJMPBBs(program);
+        static void optimize(t86::Program& program) {
+            BackendOptimizer opt;
+            bool changed = false;
+            do {
+                std::cout << program.toString(true) << std::endl;
+                changed |= PeepholeOptimizer::optimize(program);
+                std::cout << program.toString(true) << std::endl;
+                changed |= PeepholeOptimizer::optimize(program);
+            } while (changed);
         }
     private:
-        Optimizer() = default;
+        BackendOptimizer() = default;
+    };
+
+    class MiddleEndOptimizer {
+    public:
+        static void optimize(il::Program &program) {
+            MiddleEndOptimizer opt;
+            opt.removeRedundantJMPBBs(program);
+        }
+
+    private:
+        MiddleEndOptimizer() = default;
         //some BBs only contain a JMP instruction, this function removes them
-        void removeRedundantJMPBBs(il::Program& program) {
+        static void removeRedundantJMPBBs(il::Program& program) {
             std::unordered_map<il::BasicBlock *, il::BasicBlock *> redundantBlocks;
             // Step 1: Identify redundant blocks
             for (const auto &[name, function]: program.getFunctions()) {
@@ -76,8 +94,23 @@ namespace tiny {
             }
         }
 
+    };
 
+
+    class Optimizer {
+    public:
+        static void optimize(il::Program &program) {
+            MiddleEndOptimizer::optimize(program);
+        }
+
+        static void optimize(t86::Program &program) {
+            BackendOptimizer::optimize(program);
+        }
     }; // tiny::Optimizer
+
+
+
+
 
     template<typename T>
     class State {
