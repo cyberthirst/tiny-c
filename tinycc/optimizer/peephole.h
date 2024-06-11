@@ -188,6 +188,18 @@ namespace tiny {
 
         }
 
+        // removes patterns like: MOV R1, R1
+        bool rule_removeSelfCopy() {
+            auto i = getInstruction();
+            auto movIns = dynamic_cast<t86::MOVIns *>(i);
+            if (movIns == nullptr) return false;
+            if (movIns->operand1_ == movIns->operand2_) {
+                remove(0, i);
+                return true;
+            }
+            return false;
+        }
+
         std::vector<std::function<bool()>> rules_;
 
     };
