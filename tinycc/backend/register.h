@@ -46,6 +46,10 @@ namespace tiny::t86 {
             return this->type() == other.type() && this->index() == other.index() && this->physical() == other.physical();
         }
 
+        bool operator!=(const Reg& other) const {
+            return !(*this == other);
+        }
+
         bool physical() const {
             if (type_ == Type::SP || type_ == Type::BP) {
                 assert(physical_);

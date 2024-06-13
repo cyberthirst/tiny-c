@@ -69,7 +69,7 @@ namespace tiny::t86 {
                 //allocate physical regs for each basic block
                 for (auto &bb: basicBlocks) {
                     a.init(bb.get());
-                    //std::cout << "Starting allocation for block " << bb->name << std::endl;
+                    std::cout << "Starting allocation for block " << bb->name << std::endl;
                     a.allocate(bb.get());
                     //a.printFreeRegs();
                     // TODO add constant propagation
@@ -270,8 +270,8 @@ namespace tiny::t86 {
             for (curInsIndex = 0; curInsIndex < instructions.size(); ++curInsIndex) {
                 Instruction *i = instructions[curInsIndex].get();
                 physicalRegInvariant();
-                //std::cout << "Processing instruction " << i->toString() << std::endl;
-                //printOperandToRegMap();
+                std::cout << "Processing instruction " << i->toString() << std::endl;
+                printOperandToRegMap();
 
                 // last instruction in the block
                 if (curInsIndex + 1 == instructions.size()) {
@@ -335,7 +335,8 @@ namespace tiny::t86 {
                         // do the optimization to replace the MOV with NOP
                         if (memOp != nullptr) { // target is memory, thus we replace the MOV with NOP
                             if (operandToRegMap_.find(target) != operandToRegMap_.end())
-                                insertFreeReg(operandToRegMap_[target]);
+                                if (operandToRegMap_[target] != operandToRegMap_[source])
+                                    insertFreeReg(operandToRegMap_[target]);
                             operandToRegMap_[target] = operandToRegMap_[source];
                             i = replaceWithNOP(currentBlock_, curInsIndex); // assign is done just for printing purposes
                         }
