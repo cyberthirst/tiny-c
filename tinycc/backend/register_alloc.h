@@ -8,6 +8,7 @@
 
 #include "register.h"
 #include "program_structures.h"
+#include "utils.h"
 
 namespace tiny::t86 {
 
@@ -80,7 +81,7 @@ namespace tiny::t86 {
         }
     private:
         void init(BasicBlock* b) {
-            computeLiveness(b);
+            liveness = computeLiveness(b);
         }
 
         void deinit() {
@@ -92,44 +93,6 @@ namespace tiny::t86 {
         BeladyRegAllocator(Program &program, size_t numFreeRegs) : p_(program), numFreeRegs_(numFreeRegs) {
             for (size_t i = 1; i <= numFreeRegs; ++i) {
                 freeRegs_.insert(i);
-            }
-        }
-
-        void computeLiveness(BasicBlock* block) {
-            const auto& instructions = block->getInstructions();
-
-            // Iterate over the instructions in reverse order
-            for (int i = instructions.size() - 1; i >= 0; --i) {
-                // copy the set of live vars from the next instruction (ie the one with the higher index)
-                if (i < instructions.size() - 1)
-                    liveness[i] = liveness[i + 1];
-
-                const auto& instruction = instructions[i];
-                const auto& binary = dynamic_cast<BinaryIns*>(instruction.get());
-                // for binary insns (except CMP) we need to remove the target and add the source
-                if (binary != nullptr) {
-                    if (dynamic_cast<CMPIns *>(instruction.get()) != nullptr) {
-                        for (const auto& operand : binary->getOperands())
-                            liveness[i].insert(operand);
-                        continue;
-                    }
-                    else {
-                        auto target = binary->getOperands()[0];
-                        auto source = binary->getOperands()[1];
-                        liveness[i].erase(target);
-                        liveness[i].insert(source);
-
-                        continue;
-                    }
-                }
-
-                for (const auto& operand : instruction->getOperands()) {
-                    // don't care for labels
-                    if (dynamic_cast<LabelOp*>(operand) != nullptr)
-                        continue;
-
-                    liveness[i].insert(operand);
-                }
             }
         }
 
@@ -207,40 +170,6 @@ namespace tiny::t86 {
             spillHelper(toSpill);
         }
 
-        bool isLastUse(Operand* operand, size_t i) {
-            //for BP and SP we don't care about the last use
-            if (isSpecialRegOperand(operand))
-                return false;
-
-            for (size_t j = i + 1; j < liveness.size(); ++j) {
-                if (liveness[j].find(operand) != liveness[j].end())
-                    return false;
-            }
-
-            return true;
-        }
-
-        struct OperandHash {
-            std::size_t operator()(const Operand* operand) const {
-                return operand->hash();
-            }
-        };
-
-        struct OperandEqual {
-            bool operator()(const Operand* lhs, const Operand* rhs) const {
-                return lhs->equals(rhs);
-            }
-        };
-
-        bool isSpecialRegOperand(Operand* operand) {
-            auto reg = dynamic_cast<RegOp*>(operand);
-            if (reg != nullptr && isSpecialReg(reg->reg_)) {
-                assert(reg->reg_.physical());
-                return true;
-            }
-            return false;
-        }
-
         void printOperandToRegMap() {
             std::cout << "->->->->->->->->->->" << std::endl;
             for (const auto& [operand, reg] : operandToRegMap_) {
@@ -306,7 +235,7 @@ namespace tiny::t86 {
                     for (auto& [operand, reg] : operandToRegMap_) {
                         if (operand != target) {
                             if (reg == operandToRegMap_[target]) {
-                                if (!isLastUse(operand, curInsIndex)){
+                                if (!isLastUse(liveness, operand, curInsIndex)){
                                     found = true;
                                 }
                             }
@@ -448,6 +377,4 @@ namespace tiny::t86 {
         size_t numFreeRegs_;
         Program &p_;
     };
-
-
 }
