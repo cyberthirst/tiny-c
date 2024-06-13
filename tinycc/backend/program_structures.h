@@ -56,12 +56,6 @@ namespace tiny::t86 {
             return i++;
         }
 
-
-    private:
-
-        friend class Function;
-        friend class Program;
-
         std::string toString(int &address) const {
             std::stringstream s;
             s << "#bb: " << name << ":" << "\n";
@@ -70,6 +64,12 @@ namespace tiny::t86 {
             }
             return s.str();
         }
+
+
+    private:
+
+        friend class Function;
+        friend class Program;
 
         std::vector<std::unique_ptr<Instruction>> insns_;
     };

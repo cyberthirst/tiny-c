@@ -98,4 +98,11 @@ namespace tiny::t86 {
         return true;
     }
 
+    NOPIns * replaceWithNOP(BasicBlock* currentBlock_, size_t i) {
+        assert(i < currentBlock_->size());
+        auto nop = new NOPIns();
+        currentBlock_->getInstructions()[i] = std::unique_ptr<Instruction>(nop);
+        return nop;
+    }
+
 }

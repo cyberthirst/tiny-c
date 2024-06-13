@@ -263,14 +263,6 @@ namespace tiny::t86 {
             }
         }
 
-
-        NOPIns * replaceCurrentInsWithNOP() {
-            auto nop = new NOPIns();
-            currentBlock_->getInstructions()[curInsIndex] = std::unique_ptr<Instruction>(nop);
-            return nop;
-        }
-
-
         void allocate(BasicBlock *b) {
             currentBlock_ = b;
             assert(operandToRegMap_.empty());
@@ -345,7 +337,7 @@ namespace tiny::t86 {
                             if (operandToRegMap_.find(target) != operandToRegMap_.end())
                                 insertFreeReg(operandToRegMap_[target]);
                             operandToRegMap_[target] = operandToRegMap_[source];
-                            i = replaceCurrentInsWithNOP(); // assign is done just for printing purposes
+                            i = replaceWithNOP(currentBlock_, curInsIndex); // assign is done just for printing purposes
                         }
                         // source is in register and target is a register
                         // in this case the source can be in more than one register (bc we map it to another register)
@@ -353,7 +345,7 @@ namespace tiny::t86 {
                         else {
                             operandToRegMap_[target] = operandToRegMap_[source];
                             //operandToRegMap_[source] = operandToRegMap_[target];
-                            i = replaceCurrentInsWithNOP(); // assign is done just for printing purposes
+                            i = replaceWithNOP(currentBlock_, curInsIndex); // assign is done just for printing purposes
                             assert(operandToRegMap_[target].physical());
                         }
                     }
