@@ -4,7 +4,7 @@
 
 #pragma once
 
-#include <set>
+#include <unordered_set>
 
 #include "register.h"
 #include "program_structures.h"
@@ -372,7 +372,7 @@ namespace tiny::t86 {
         BasicBlock *currentBlock_;
         size_t curInsIndex;
         std::unordered_map<Operand*, Reg, OperandHash, OperandEqual> operandToRegMap_;  // Map of operands to registers
-        std::unordered_map<size_t, std::set<Operand*, OperandEqual>> liveness;
+        std::unordered_map<int, std::unordered_set<Operand*, OperandHash, OperandEqual>> liveness;
         std::set<int> freeRegs_;
         size_t numFreeRegs_;
         Program &p_;

@@ -33,7 +33,7 @@ namespace tiny::t86 {
         }
 
         std::size_t hash() const override {
-            return std::hash<int>{}(static_cast<int>(reg_.type())) ^ std::hash<int>{}(reg_.index());
+            return std::hash<int>{}(static_cast<int>(reg_.type())) ^ std::hash<int>{}(reg_.index() ^ std::hash<int>{}(reg_.physical()));
         }
         Reg reg_;
     };

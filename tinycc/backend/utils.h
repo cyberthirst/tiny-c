@@ -41,8 +41,8 @@ namespace tiny::t86 {
     }
 
 
-    std::unordered_map<size_t, std::set<Operand*, OperandEqual>> computeLiveness(BasicBlock* block) {
-        std::unordered_map<size_t, std::set<Operand*, OperandEqual>> liveness;
+    std::unordered_map<int, std::unordered_set<Operand*, OperandHash, OperandEqual>> computeLiveness(BasicBlock* block) {
+        std::unordered_map<int, std::unordered_set<Operand*, OperandHash, OperandEqual>> liveness;
         const auto& instructions = block->getInstructions();
 
         // Iterate over the instructions in reverse order
@@ -55,9 +55,11 @@ namespace tiny::t86 {
             const auto& binary = dynamic_cast<BinaryIns*>(instruction.get());
             // for binary insns (except CMP) we need to remove the target and add the source
             if (binary != nullptr) {
-                if (dynamic_cast<CMPIns *>(instruction.get()) != nullptr) {
-                    for (const auto& operand : binary->getOperands())
-                        liveness[i].insert(operand);
+                if (dynamic_cast<CMPIns *>(binary) != nullptr) {
+                    liveness[i].insert(binary->operand1_);
+                    liveness[i].insert(binary->operand2_);
+                    if (binary->operand1_ == binary->operand2_)
+                        continue;
                     continue;
                 }
                 else {
@@ -83,7 +85,7 @@ namespace tiny::t86 {
     }
 
 
-    bool isLastUse(std::unordered_map<size_t, std::set<Operand*, OperandEqual>> &liveness, Operand* operand, size_t i) {
+    bool isLastUse(std::unordered_map<int, std::unordered_set<Operand*, OperandHash, OperandEqual>> &liveness, Operand* operand, size_t i) {
         //for BP and SP we don't care about the last use
         if (isSpecialRegOperand(operand))
             return false;
