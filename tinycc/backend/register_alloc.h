@@ -233,7 +233,7 @@ namespace tiny::t86 {
                     // if such operand exists, we need to move it to a different register
                     bool found = false;
                     for (auto& [operand, reg] : operandToRegMap_) {
-                        if (operand != target) {
+                        if (*operand != *target) {
                             if (reg == operandToRegMap_[target]) {
                                 if (!isLastUse(liveness, operand, curInsIndex)){
                                     found = true;

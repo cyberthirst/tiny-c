@@ -83,9 +83,10 @@ namespace tiny {
         }
 
         void removeInstruction(size_t bb, size_t instr, t86::Instruction *expected ) {
+            auto block = bbs_->operator[](bb).get();
             assert(bb < bbs_->size());
-            assert(instr < bbs_->operator[](bb)->size());
-            assert(bbs_->operator[](bb)->operator[](instr) == expected);
+            assert(instr < block->size());
+            assert(expected == block->operator[](instr));
             auto begin = bbs_->operator[](bb)->getInstructions().begin();
             bbs_->operator[](bb)->getInstructions().erase(begin + instr);
             if (bbs_->operator[](bb)->size() == 0) {
@@ -114,7 +115,7 @@ namespace tiny {
     };
 
 
-    class PeepholeOptimizer : public ProgramTraverser{
+    class PeepholeOptimizer : public ProgramTraverser {
     public:
         static bool optimize(t86::Program &program) {
             PeepholeOptimizer o(program);
@@ -125,7 +126,7 @@ namespace tiny {
                 o.setFunction(f.second);
                     while (!o.isEnd()) {
                         for (auto &rule : o.rules_) {
-                            o.print();
+                            //o.print();
                             changed |= rule();
                             o.resetWindow();
                         }
@@ -142,6 +143,7 @@ namespace tiny {
             rules_.emplace_back([this] { return this->rule_removeNOP(); });
             rules_.emplace_back([this] { return this->rule_removeSelfCopy(); });
             rules_.emplace_back([this] { return this->rule_removeUnusedMov(); });
+            rules_.emplace_back([this] { return this->rule_removeCyclicMov(); });
         }
 
         void remove(size_t n, t86::Instruction *expected) {
@@ -182,7 +184,7 @@ namespace tiny {
             auto i = getInstruction();
             auto movIns = dynamic_cast<t86::MOVIns *>(i);
             if (movIns == nullptr) return false;
-            if (movIns->operand1_ == movIns->operand2_) {
+            if (*movIns->operand1_ == *movIns->operand2_) {
                 remove(0, i);
                 return true;
             }
@@ -201,7 +203,7 @@ namespace tiny {
             auto next = getInstruction();
             auto nextMovIns = dynamic_cast<t86::MOVIns *>(next);
             if (nextMovIns == nullptr) return false;
-            if (nextMovIns->operand1_ == target) {
+            if (*nextMovIns->operand1_ == *target) {
                 remove(0, i);
             }
             return false;
@@ -218,7 +220,7 @@ namespace tiny {
             auto next = getInstruction();
             auto nextMovIns = dynamic_cast<t86::MOVIns *>(next);
             if (nextMovIns == nullptr) return false;
-            if (nextMovIns->operand1_ == source) {
+            if (*nextMovIns->operand1_ == *source) {
                 remove(1, i);
             }
             return false;

@@ -16,6 +16,14 @@ namespace tiny::t86 {
         virtual std::string toString() const = 0;
         virtual bool equals(const Operand *other) const = 0;
         virtual std::size_t hash() const = 0;
+        bool operator==(const Operand &rhs) const {
+            return this->equals(&rhs);
+        }
+
+        bool operator!=(const Operand &rhs) const {
+            return !this->equals(&rhs);
+        }
+
     };
 
     class RegOp : public Operand {
