@@ -216,7 +216,24 @@ namespace tiny::t86 {
             }
         }
 
-        void remapOperands(BinaryIns *binary) {
+        void remapOperands(Instruction *ins) {
+            if (dynamic_cast<BinaryIns *>(ins) != nullptr)
+                remapBinaryOperands(dynamic_cast<BinaryIns *>(ins));
+            else if (dynamic_cast<UnaryIns* >(ins) != nullptr)
+                remapUnaryOperands(dynamic_cast<UnaryIns *>(ins));
+        }
+
+        void remapUnaryOperands(UnaryIns *ins) {
+            auto operand = ins->operand_;
+            auto regOp = dynamic_cast<RegOp*>(operand);
+            if (regOp != nullptr && !isSpecialReg(regOp->reg_)) {
+                assert(operandToRegMap_.find(operand) != operandToRegMap_.end());
+                assert(operandToRegMap_[operand].physical());
+                ins->operand_ = new RegOp(operandToRegMap_[operand]);
+            }
+        }
+
+        void remapBinaryOperands(BinaryIns *binary) {
             std::vector<Operand *> originalOperands = binary->getOperands();
             auto target = originalOperands[0];
             auto source = originalOperands[1];
@@ -270,8 +287,8 @@ namespace tiny::t86 {
             for (curInsIndex = 0; curInsIndex < instructions.size(); ++curInsIndex) {
                 Instruction *i = instructions[curInsIndex].get();
                 physicalRegInvariant();
-                std::cout << "Processing instruction " << i->toString() << std::endl;
-                printOperandToRegMap();
+                //std::cout << "Processing instruction " << i->toString() << std::endl;
+                //printOperandToRegMap();
 
                 // last instruction in the block
                 if (curInsIndex + 1 == instructions.size()) {
@@ -354,9 +371,7 @@ namespace tiny::t86 {
                     continue;
                 }
 
-                BinaryIns *binary = dynamic_cast<BinaryIns *>(i);
-                if (binary != nullptr)
-                    remapOperands(binary);
+                remapOperands(i);
                 std::cout << i->toString() << std::endl;
             }
 

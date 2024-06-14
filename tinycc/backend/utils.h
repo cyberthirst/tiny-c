@@ -58,8 +58,6 @@ namespace tiny::t86 {
                 if (dynamic_cast<CMPIns *>(binary) != nullptr) {
                     liveness[i].insert(binary->operand1_);
                     liveness[i].insert(binary->operand2_);
-                    if (binary->operand1_ == binary->operand2_)
-                        continue;
                     continue;
                 }
                 else {
