@@ -5,6 +5,7 @@
 #pragma once
 
 #include <queue>
+#include <deque>
 
 #include "../optimizer/il.h"
 #include "t86_instruction.h"
@@ -70,7 +71,7 @@ namespace tiny {
                 while (!bbWorklist_.empty()) {
                     il::BasicBlock *bb = bbWorklist_.front();
                     bb_ = f_->addBasicBlock(bb->name);
-                    bbWorklist_.pop();
+                    bbWorklist_.pop_front();
                     if (generatePrologue) {
                         generateCdeclPrologue();
                         generatePrologue = false;
@@ -83,10 +84,14 @@ namespace tiny {
             }
         }
 
-        void addBBToWorklist(il::BasicBlock *bb) {
+        void addBBToWorklist(il::BasicBlock *bb, bool front=false) {
             if (bbVisited_.find(bb) == bbVisited_.end()) {
                 bbVisited_.insert(bb);
-                bbWorklist_.push(bb);
+                if (front) {
+                    bbWorklist_.push_front(bb);
+                } else {
+                    bbWorklist_.push_back(bb);
+                }
             }
         }
 
@@ -374,7 +379,7 @@ namespace tiny {
         //the function we are currently compiling, it is in the intermediate representation
         const il::Function *ilf_ = nullptr;
 
-        std::queue<il::BasicBlock *> bbWorklist_;
+        std::deque<il::BasicBlock *> bbWorklist_;
         std::unordered_set<il::BasicBlock *> bbVisited_;
 
         std::queue<Symbol> funWorklist_;
