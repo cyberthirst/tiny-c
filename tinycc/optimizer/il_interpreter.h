@@ -217,6 +217,13 @@ namespace tiny::il {
                         executeBinaryOperation(ins, [](auto lhs, auto rhs) { return static_cast<int64_t>(lhs < rhs ? 1 : 0); }, lhs, rhs);
                         break;
                     }
+                    case Opcode::GT: {
+                        auto gt = REG_REG(ins);
+                        Reg lhs = get(gt->reg1);
+                        Reg rhs = get(gt->reg2);
+                        executeBinaryOperation(ins, [](auto lhs, auto rhs) { return static_cast<int64_t>(lhs > rhs ? 1 : 0); }, lhs, rhs);
+                        break;
+                    }
                     case Opcode::EQ: {
                         auto eq = REG_REG(ins);
                         Reg lhs = get(eq->reg1);

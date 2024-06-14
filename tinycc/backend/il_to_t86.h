@@ -251,13 +251,13 @@ namespace tiny {
                 ARITHMETIC_INS(MUL, MUL)
                 ARITHMETIC_INS(DIV, DIV)
 
-                case il::Opcode::LT: {
-                    (*this) += new t86::CMPIns(
-                            regMap_[instr->reg1],
-                            regMap_[instr->reg2]
-                    );
+                case il::Opcode::LT:
+                case il::Opcode::GT:
+                case il::Opcode::EQ: {
+                    (*this) += new t86::CMPIns(regMap_[instr->reg1], regMap_[instr->reg2]);
                     break;
                 }
+
                 case il::Opcode::ST: {
                     //1. load the address of the variable to be stored to
                     t86::MemRegOffsetOp *dest = new t86::MemRegOffsetOp(t86::BP,
@@ -313,10 +313,15 @@ namespace tiny {
 
         t86::Instruction *selectJmp(il::Opcode op, const std::string &target) {
             switch (op) {
-                case il::Opcode::LT: {
-                    return new t86::JGEIns(new t86::LabelOp(target));
-                    break;
+                #define JMP_INS(IR_INSTR, T86_INSTR) \
+                    case il::Opcode::IR_INSTR: {     \
+                    return new t86::T86_INSTR##Ins(new t86::LabelOp(target)); \
+                    break; \
                 }
+                JMP_INS(LT, JGE)
+                JMP_INS(GT, JLE)
+                JMP_INS(EQ, JNE)
+
                 default:
                     NOT_IMPLEMENTED;
             }
@@ -326,8 +331,9 @@ namespace tiny {
             switch (instr->opcode) {
                 case il::Opcode::BR: {
                     (*this) += selectJmp(instr->reg->opcode, instr->target2->name);
-                    //compile the true branch - that will be the fallthrough case
-                    addBBToWorklist(instr->target1);
+                    // compile the true branch - that will be the fallthrough case
+                    // therefore we add it to the front of the worklist
+                    addBBToWorklist(instr->target1, true);
                     addBBToWorklist(instr->target2);
                     break;
                 }

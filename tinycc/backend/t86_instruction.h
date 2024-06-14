@@ -170,5 +170,8 @@ namespace tiny::t86 {
     JMP_INSTRUCTION(JMP);
     JMP_INSTRUCTION(JZ);
     JMP_INSTRUCTION(JGE);
+    JMP_INSTRUCTION(JLE);
+    JMP_INSTRUCTION(JE);
+    JMP_INSTRUCTION(JNE);
 
 } // namespace tiny
