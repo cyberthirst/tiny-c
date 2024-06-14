@@ -55,17 +55,16 @@ namespace tiny::t86 {
             const auto& binary = dynamic_cast<BinaryIns*>(instruction.get());
             // for binary insns (except CMP) we need to remove the target and add the source
             if (binary != nullptr) {
-                if (dynamic_cast<CMPIns *>(binary) != nullptr) {
-                    liveness[i].insert(binary->operand1_);
-                    liveness[i].insert(binary->operand2_);
-                    continue;
-                }
-                else {
+                if (dynamic_cast<MOVIns *>(binary) != nullptr) {
                     auto target = binary->getOperands()[0];
                     auto source = binary->getOperands()[1];
                     liveness[i].erase(target);
                     liveness[i].insert(source);
-
+                    continue;
+                }
+                else {
+                    liveness[i].insert(binary->operand1_);
+                    liveness[i].insert(binary->operand2_);
                     continue;
                 }
             }
