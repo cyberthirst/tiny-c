@@ -1,8 +1,11 @@
 #pragma once
+
 #include <cstdint>
 #include <unordered_map>
+
 #include "il.h"
 #include "peephole.h"
+#include "reg_optimizer.h"
 
 namespace tiny {
 
@@ -14,6 +17,7 @@ namespace tiny {
             do {
                 changed = false;
                 changed |= PeepholeOptimizer::optimize(program);
+                changed |= RegOptimizer::optimize(program);
             } while (changed);
         }
     private:

@@ -10,6 +10,7 @@
 #include "constants.h"
 
 
+// TODO add optimization: JUMP target, where target is current instruction
 namespace tiny {
     class Assembler {
     public:
@@ -19,12 +20,18 @@ namespace tiny {
         }
     private:
         Assembler() : sizeOfProgram(0) {}
+
+        void noteLabel(const std::string &label) {
+            labelAddressMap[label] = sizeOfProgram;
+            addressLabelMap[sizeOfProgram] = label;
+        }
+
         //calculates the addresses of the functions and basic blocks
         void firstPass(t86::Program &program) {
             for(auto& [funName, function] : program.getFunctions()) {
-                labelAddressMap[funName.name()] = sizeOfProgram;
+                noteLabel(funName.name());
                 for (auto &block : function->getBasicBlocks()) {
-                    labelAddressMap[block->name] = sizeOfProgram;
+                    noteLabel(block->name);
                     sizeOfProgram += block->size();
                 }
             }
@@ -61,5 +68,6 @@ namespace tiny {
         //size of the program in instructions
         size_t sizeOfProgram;
         std::map<std::string, size_t> labelAddressMap;
+        std::map<size_t, std::string> addressLabelMap;
     };
 }

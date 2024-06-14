@@ -9,10 +9,6 @@
 #include "../backend/program_structures.h"
 #include "../backend/t86_instruction.h"
 
-/*
- * patterns
- * //
- */
 
 namespace tiny {
 
