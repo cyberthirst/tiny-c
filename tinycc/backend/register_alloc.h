@@ -129,16 +129,29 @@ namespace tiny::t86 {
             curInsIndex++;
         }
 
-        void spillHelper(Operand *toSpill){
+        void spillHelper(Operand *toSpill, bool removeAll = false){
             auto *mem = dynamic_cast<MemRegOffsetOp*>(toSpill);
-            assert(mem != nullptr);
-            MOVIns *mov = new MOVIns(new MemRegOffsetOp(BP, mem->offset_),
-                                     new RegOp(operandToRegMap_[toSpill]));
-            insertInsBeforeCurrent(mov);
+            if (mem != nullptr) {
+                MOVIns *mov = new MOVIns(new MemRegOffsetOp(BP, mem->offset_),
+                                         new RegOp(operandToRegMap_[toSpill]));
+                insertInsBeforeCurrent(mov);
+            }
+
+            auto reg = operandToRegMap_[toSpill];
+            if (removeAll) {
+                // remove all operands that are mapped to the register
+                for (auto it = operandToRegMap_.begin(); it != operandToRegMap_.end();) {
+                    if (it->second == reg) {
+                        it = operandToRegMap_.erase(it);
+                    } else ++it;
+                }
+            }
+            else {
+                operandToRegMap_.erase(toSpill);
+            }
 
             // Free the register
-            insertFreeReg(operandToRegMap_[toSpill]);
-            operandToRegMap_.erase(toSpill);
+            insertFreeReg(reg);
         }
 
         void spillRegister() {
@@ -146,6 +159,13 @@ namespace tiny::t86 {
             assert(curInsIndex < liveness.size());
 
             std::unordered_map<Operand*, Reg, OperandHash, OperandEqual> live = operandToRegMap_;
+            // filter out special reg operands
+            for (auto it = live.begin(); it != live.end();) {
+                if (isSpecialRegOperand(it->first))
+                    it = live.erase(it);
+                else ++it;
+            }
+
             assert(!live.empty());
             Operand * toSpill = nullptr;
 
@@ -163,11 +183,14 @@ namespace tiny::t86 {
                 }
             }
 
-            assert(toSpill != nullptr);
+            assert(toSpill != nullptr || live.size() >= 1);
+            // if a operand to spill wasn't found, pick a random one
+            if (toSpill == nullptr) {
+                toSpill = live.begin()->first;
+            }
 
             // Spill the register
-            // temporary solution assumes that the operand to be spilled corresponds to a stack variable
-            spillHelper(toSpill);
+            spillHelper(toSpill, true);
         }
 
         void printOperandToRegMap() {
@@ -273,10 +296,12 @@ namespace tiny::t86 {
 
             auto sourceRegOp = dynamic_cast<RegOp*>(source);
             if (sourceRegOp != nullptr) {
-                // TODO make into a function
-                assert(operandToRegMap_.find(source) != operandToRegMap_.end());
-                assert(operandToRegMap_[source].physical());
-                binary->operand2_ = new RegOp(operandToRegMap_[source]);
+                // TODO maybe this should consider even special registers
+                if (!isSpecialReg(sourceRegOp->reg_)) {
+                    assert(operandToRegMap_.find(source) != operandToRegMap_.end());
+                    assert(operandToRegMap_[source].physical());
+                    binary->operand2_ = new RegOp(operandToRegMap_[source]);
+                }
             }
         }
 

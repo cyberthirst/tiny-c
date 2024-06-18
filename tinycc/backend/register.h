@@ -20,6 +20,7 @@ namespace tiny::t86 {
 
         Reg(Type type, int index) : type_(type), index_(index), physical_(false) {}
         Reg(Type type, int index, bool physical) : type_(type), index_(index), physical_(physical) {}
+        Reg(const Reg& other) : type_(other.type_), index_(other.index_), physical_(other.physical_) {}
 
         Reg() {}
 
@@ -48,6 +49,17 @@ namespace tiny::t86 {
 
         bool operator!=(const Reg& other) const {
             return !(*this == other);
+        }
+
+        bool operator=(const Reg& other) {
+            auto typ = other.type();
+            if (typ == Type::SP || typ == Type::BP || typ == Type::GP) {
+                assert(other.physical_);
+            }
+
+            type_ = other.type_;
+            index_ = other.index_;
+            physical_ = other.physical_;
         }
 
         bool physical() const {
