@@ -65,22 +65,24 @@ namespace tiny::t86 {
         static void allocatePhysicalRegs(Program &program, size_t numFreeRegs) {
             BeladyRegAllocator a(program, numFreeRegs);
             for (auto& [funName, function] : a.p_.getFunctions()) {
+                a.initFunc(function);
                 auto &basicBlocks = function->getBasicBlocks();
                 //allocate physical regs for each basic block
                 for (auto &bb: basicBlocks) {
-                    a.init(bb.get());
+                    a.initBB(bb.get());
                     std::cout << "Starting allocation for block " << bb->name << std::endl;
                     a.allocate(bb.get());
                     //a.printFreeRegs();
-                    // TODO add constant propagation
-                    // TODO remove unused registers
-                    // TODO remove spills if value wasn't modified after the initial load
                     a.deinit();
                 }
+                a.addRegBackup();
             }
         }
     private:
-        void init(BasicBlock* b) {
+        void initFunc(Function *f) {
+            currentFunction_ = f;
+        }
+        void initBB(BasicBlock* b) {
             liveness = computeLiveness(b);
         }
 
@@ -93,6 +95,70 @@ namespace tiny::t86 {
         BeladyRegAllocator(Program &program, size_t numFreeRegs) : p_(program), numFreeRegs_(numFreeRegs) {
             for (size_t i = 1; i <= numFreeRegs; ++i) {
                 freeRegs_.insert(i);
+            }
+        }
+
+
+        // in cdecl the callee is responsible for cleaning the stack
+        // the strategy is the go through the insns of the function and note all the used registers
+        // then we push all the used registers to the stack
+        // in the epilogue we pop all the registers from the stack
+        void addRegBackup(){
+            std::set<int> usedRegs;
+            auto &basicBlocks = currentFunction_->getBasicBlocks();
+            for (auto &bb: basicBlocks) {
+                auto &instructions = bb->getInstructions();
+                for (auto &ins: instructions) {
+                    auto binary = dynamic_cast<BinaryIns*>(ins.get());
+                    if (binary != nullptr) {
+                        auto operands = binary->getOperands();
+                        for (auto o: operands) {
+                            auto regOp = dynamic_cast<RegOp*>(o);
+                            if (regOp != nullptr && !isSpecialReg(regOp->reg_)) {
+                                usedRegs.insert(regOp->reg_.index());
+                            }
+                        }
+                    }
+                }
+            }
+
+            // sanity check - the used registers are only those we can actually allocate
+            for (auto i : usedRegs) {
+                assert(freeRegs_.find(i) != freeRegs_.end());
+            }
+
+
+            // take the 1st bb and find the SUB SP, x instruction - we will insert the pushes after this instruction
+            auto &instructions = basicBlocks[0]->getInstructions();
+
+            for (size_t i = 0; i < instructions.size(); ++i) {
+                auto *ins = instructions[i].get();
+                auto *subIns = dynamic_cast<SUBIns*>(ins);
+                if (subIns != nullptr) {
+                    auto *regOp = dynamic_cast<RegOp*>(subIns->operand1_);
+                    if (regOp == nullptr || regOp->reg_ != SP) continue;
+                    // set is sorted, so we have an ordering guarantee
+                    for (auto it = usedRegs.rbegin(); it != usedRegs.rend(); ++it) {
+                        auto push = new PUSHIns(new RegOp(Reg(Reg::Type::GP, *it)));
+                        instructions.insert(instructions.begin() + i + 1, std::unique_ptr<Instruction>(push));
+                    }
+                    break;
+                }
+            }
+
+
+            // find all the basic epilogue bbs (they contain "epilogue" substring in their name)
+            // insert the pops at the beginning of the bb in reverse order
+            for (auto &bb: basicBlocks) {
+                if (bb->name.find("epilogue") != std::string::npos) {
+                    auto &instructions = bb->getInstructions();
+                    // iterate the used registers in reverse order
+                    size_t i = 0;
+                    for (auto it = usedRegs.rbegin(); it != usedRegs.rend(); ++it, ++i) {
+                        auto pop = new POPIns(new RegOp(Reg(Reg::Type::GP, *it, true)));
+                        instructions.insert(instructions.begin() + i, std::unique_ptr<Instruction>(pop));
+                    }
+                }
             }
         }
 
@@ -403,6 +469,7 @@ namespace tiny::t86 {
         }
 
         BasicBlock *currentBlock_;
+        Function *currentFunction_;
         size_t curInsIndex;
         std::unordered_map<Operand*, Reg, OperandHash, OperandEqual> operandToRegMap_;  // Map of operands to registers
         std::unordered_map<int, std::unordered_set<Operand*, OperandHash, OperandEqual>> liveness;
