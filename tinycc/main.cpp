@@ -85,7 +85,8 @@ bool testASMProgram(t86::Program const & p, Test const * test) {
     }
     std::string result = runVM(p);
     if (test->marked) {
-         std::cout << p.toString(true) << std::endl;
+        std::cout << "running the following program in VM:"  << std::endl;
+        std::cout << p.toString(true) << std::endl;
         std::cout << "vm result: " << result << std::endl;
     }
     if (stoi(result) != test->result) {
@@ -114,11 +115,21 @@ bool compile(std::string const & contents, Test const * test, TestResult *result
         Optimizer::optimize(p);
         if (!testIRProgram(p, test))
             return false;
+
         // translate to target
         t86::Program t86Program = T86CodeGen::translateProgram(p);
+        if (Options::verboseASM) {
+            std::cout << "after translation to t86: \n";
+            std::cout << t86Program.toString(true) << std::endl;
+        }
 
         // register allocation
         t86::BeladyRegAllocator::allocatePhysicalRegs(t86Program, Options::numRegisters);
+        if (Options::verboseASM)
+           std::cout << t86Program.toString(true) << std::endl;
+
+        //Optimizer::optimize(t86Program);
+        //std::cout << t86Program.toString(false) << std::endl;
 
         Assembler::assemble(t86Program);
         if (!testASMProgram(t86Program, test))

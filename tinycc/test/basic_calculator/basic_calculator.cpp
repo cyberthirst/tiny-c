@@ -24,6 +24,23 @@ std::vector<Test> basic_calculator_tests = {
          return add_n(0, 20); \
      }", 20),
     TEST("\
+    int fibonacci(int n) { \
+        if (n == 0) { \
+            return 0;\
+        } \
+        else if (n == 1) { \
+            return 1; \
+        }\
+        else {\
+            int a = fibonacci(n-1);\
+            int b = fibonacci(n-2);\
+            return a + b; \
+        }\
+    } \
+    int main() { \
+        return fibonacci(8); \
+     }", 21, true),
+    TEST("\
     int main() { \
         int n = 0;\
         while (n < 10) {\
@@ -35,11 +52,46 @@ std::vector<Test> basic_calculator_tests = {
     int main() { \
         int n = 0;\
         while (n < 10) {\
+            n = n + 1;\
+            if (5 < n ) {\
+                break;\
+            }\
+        }\
+         return n; \
+     }", 6),
+    TEST("\
+    int main() { \
+        int n = 0;\
+        for (int i = 0; i < 10; i = i + 1) {\
+            if (n > 5 ) {\
+                continue;\
+            }\
+            n = n + 1;\
+        }\
+         return n; \
+     }", 6),
+    TEST("\
+    int main() { \
+        int n = 0;\
+        for (int i = 0; i < 10; i = i + 1) {\
+            if (n == 5 ) {\
+                n = n + 6;\
+                continue;\
+            }\
+            n = n + 1;\
+        }\
+         return n; \
+     }", 15),
+
+    TEST("\
+    int main() { \
+        int n = 0;\
+        while (n < 10) {\
             int a = 1;\
             n = n + a;\
         }\
          return n; \
-     }", 10, true),
+     }", 10),
     TEST("\
     int main() { \
         return 1 + 10; \
@@ -105,6 +157,17 @@ std::vector<Test> basic_calculator_tests = {
         }\
         return a;\
      }", 20),
+    TEST("\
+    int main() { \
+        int a = 10;\
+        if (a < 11) {\
+            a = 15;\
+        }\
+        else {\
+            a = 20;\
+        }\
+        return a;\
+     }", 15),
     TEST("\
     int main() { \
         int a = 10;\

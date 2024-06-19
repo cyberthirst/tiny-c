@@ -10,7 +10,7 @@
 #include <string>
 
 #define RUN_ALL_TEST_SUITES 0
-#define RUN_MARKED_TESTS_ONLY 1
+#define RUN_MARKED_TESTS_ONLY 0
 
 /*
  * The tests have the following structure: TEST(input, result, marked)
