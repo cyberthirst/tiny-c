@@ -195,24 +195,32 @@ namespace tiny::t86 {
             curInsIndex++;
         }
 
-        void spillHelper(Operand *toSpill, bool removeAll = false){
+        void spillIfMem(Operand* toSpill) {
             auto *mem = dynamic_cast<MemRegOffsetOp*>(toSpill);
             if (mem != nullptr) {
                 MOVIns *mov = new MOVIns(new MemRegOffsetOp(BP, mem->offset_),
                                          new RegOp(operandToRegMap_[toSpill]));
                 insertInsBeforeCurrent(mov);
             }
+        }
+
+        void spillHelper(Operand *toSpill, bool removeAll = false){
+            assert(operandToRegMap_.find(toSpill) != operandToRegMap_.end());
+            assert(operandToRegMap_[toSpill].physical());
 
             auto reg = operandToRegMap_[toSpill];
+
             if (removeAll) {
                 // remove all operands that are mapped to the register
                 for (auto it = operandToRegMap_.begin(); it != operandToRegMap_.end();) {
                     if (it->second == reg) {
+                        spillIfMem(it->first);
                         it = operandToRegMap_.erase(it);
                     } else ++it;
                 }
             }
             else {
+                spillIfMem(toSpill);
                 operandToRegMap_.erase(toSpill);
             }
 
@@ -378,8 +386,8 @@ namespace tiny::t86 {
             for (curInsIndex = 0; curInsIndex < instructions.size(); ++curInsIndex) {
                 Instruction *i = instructions[curInsIndex].get();
                 physicalRegInvariant();
-                //std::cout << "Processing instruction " << i->toString() << std::endl;
-                //printOperandToRegMap();
+                std::cout << "Processing instruction " << i->toString() << std::endl;
+                printOperandToRegMap();
 
                 // last instruction in the block
                 if (curInsIndex + 1 == instructions.size()) {
