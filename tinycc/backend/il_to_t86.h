@@ -32,7 +32,6 @@ namespace tiny {
         }
 
         T86CodeGen & operator += (t86::Instruction *ins) {
-            //p_.addInstruction(std::unique_ptr<t86::Instruction>{ins});
             bb_->append(ins);
             lastResult_ = ins;
             return *this;
@@ -41,10 +40,8 @@ namespace tiny {
         T86CodeGen(const il::Program &program) : ilp_{program} {}
     private:
         t86::Instruction* translate(il::Instruction *child) {
-            // need to check if child is not null before dereferencing
-            if(child != nullptr){
-                visitChild(child);
-            }
+            assert(child != nullptr && "Child is null");
+            visitChild(child);
             return lastResult_;
         }
 
@@ -112,7 +109,7 @@ namespace tiny {
             int stackSize = ilf_->getStackSize(true);
             (*this) += new t86::SUBIns(new t86::RegOp(t86::SP),
                                                      new t86::ImmOp(stackSize));
-            //currently we have a primitive way of handling function arguments
+            // currently we have a primitive way of handling function arguments
             // - the caller pushes the arguments on the stack
             // - the callee then MOVs the arguments from the stack to the function's stack frame
             // - the callee then uses the arguments from the stack frame
@@ -120,10 +117,10 @@ namespace tiny {
             // - this is all done as part of the function prologue
             for (size_t i = 0; i < ilf_->numArgs(); ++i) {
                 auto *instr = dynamic_cast<il::Instruction::ImmI*>(const_cast<il::Instruction *>(ilf_->getArg(i)));
-                //we allocate new register for the argument
-                //we then move the argument from the stack to the register
-                //we add REG_TO_MEM_WORD because we have to skip the return address
-                //we add 1 because the arguments are numbered from 0 - so the first argument is at:
+                // allocate new register for the argument
+                // then move the argument from the stack to the register
+                // add REG_TO_MEM_WORD because we have to skip the return address
+                // add 1 because the arguments are numbered from 0 - so the first argument is at:
                 //  ARG0     <- BP + 2
                 //  RET ADDR <- BP + 1
                 //  OLD BP   <- BP, SP
@@ -136,13 +133,13 @@ namespace tiny {
             auto tmp = f_->addBasicBlock(t86::BasicBlock::makeUniqueName("epilogue"));
             (*this) += new t86::JMPIns(new t86::LabelOp(tmp->name));
             bb_ = tmp;
-            // cleanup the local variables
+            // 1. cleanup the local variables
             int stackSize = ilf_->getStackSize(true);
             (*this) += new t86::ADDIns(new t86::RegOp(t86::SP),
                                                      new t86::ImmOp(stackSize));
-            // 1. restore base pointer
+            // 2. restore base pointer
             (*this) += new t86::POPIns(new t86::RegOp(t86::BP));
-            // 2. return
+            // 3. return
             (*this) += new t86::RETIns();
             // the caller is responsible for cleaning up the arguments from the stack
         }
@@ -156,7 +153,7 @@ namespace tiny {
         }
 
         void leaveFunction() {
-            assert(bbWorklist_.empty() && "Not all basic blocks of a function were translated");
+            assert(bbWorklist_.empty() && "Not all function's basic blocks were translated");
             f_ = nullptr;
             ilf_ = nullptr;
             bb_ = nullptr;
@@ -164,8 +161,8 @@ namespace tiny {
 
         void addMOV(il::Instruction *i, t86::Operand *dest, t86::Operand *src) {
             (*this) += new t86::MOVIns(dest, src);
-            t86::RegOp *regOp = dynamic_cast<t86::RegOp*>(dest);
-            if(regOp != nullptr) {
+            auto *regOp = dynamic_cast<t86::RegOp*>(dest);
+            if (regOp != nullptr) {
                 regMap_[i] = regOp;
             }
         }
@@ -178,12 +175,11 @@ namespace tiny {
                     break;
                 }
                 case il::Opcode::ALLOCA: {
-                    int offset = stackAllocator_.allocate(instr, instr->value);
-                    //we create a new local variable on the stack and initialize it to 0
-                    //the alloca instruction is then accompanied by a store instruction,
-                    //   - in ast_to_il we have: (*this) += ST(addr, arg);, the alloca represents the addr
-                    //which initializes the variable to appropriate value
-                    addMOV(instr, new t86::MemRegOffsetOp(t86::BP, offset), new t86::ImmOp(0));
+                    // we allocate new local variable on the stack
+                    // the alloca instruction is then accompanied by a store instruction,
+                    // in ast_to_il we have: (*this) += ST(addr, arg);, the alloca represents the addr
+                    // which initializes the variable to appropriate value
+                    (void)stackAllocator_.allocate(instr, instr->value);
                     //TODO enable this assert
                     //assert(stackAllocator_.getStackSize() <= f_->getStackSize(true));
                     break;
@@ -194,7 +190,6 @@ namespace tiny {
                     addMOV(instr, new RegOp(regAllocator_.allocate()),*
                                       new MemRegOffsetOp(regAllocator_.getBP(), REG_TO_MEM_WORD + i->value + 1));*/
                     //handled directly in the prologue
-                    NOT_IMPLEMENTED;
                     break;
                 }
 
@@ -216,14 +211,8 @@ namespace tiny {
             }
         }
 
-        // Visitor for bnary operation on two registers.
         void visit(il::Instruction::RegReg* instr) override {
             switch (instr->opcode) {
-                //if the source operand is LD, then we:
-                // 1. allocate a new reg
-                // 2. move the source operand to the new reg
-                // 3. perform the operation on the new reg
-                // - this is good because we won't overwrite the variable register
                 #define ARITHMETIC_INS(IR_INSTR, T86_INSTR) \
                     case il::Opcode::IR_INSTR: {            \
                     t86::RegOp *op1 = regMap_[instr->reg1]; \
@@ -235,34 +224,24 @@ namespace tiny {
                     regMap_[instr] = op1; \
                     break; \
                 }
-                /*case il::Opcode::ADD: {
-                    RegOp *op1 = regMap_[instr->reg1];
-                    RegOp *op2 = regMap_[instr->reg2];
-                    (*this) += new t86::ADDIns(
-                            op1,
-                            op2
-                    );
-                    regMap_[instr] = op1;
-                    break;
-                }*/
 
                 ARITHMETIC_INS(ADD, ADD)
                 ARITHMETIC_INS(SUB, SUB)
                 ARITHMETIC_INS(MUL, MUL)
                 ARITHMETIC_INS(DIV, DIV)
 
-                case il::Opcode::LT:
-                case il::Opcode::GT:
+                case il::Opcode::LT: // fallthrough
+                case il::Opcode::GT: // fallthrough
                 case il::Opcode::EQ: {
                     (*this) += new t86::CMPIns(regMap_[instr->reg1], regMap_[instr->reg2]);
                     break;
                 }
 
                 case il::Opcode::ST: {
-                    //1. load the address of the variable to be stored to
-                    t86::MemRegOffsetOp *dest = new t86::MemRegOffsetOp(t86::BP,
+                    // 1. fetch the address of the target variable
+                    auto *dest = new t86::MemRegOffsetOp(t86::BP,
                                                               stackAllocator_.getOffset(instr->reg1));
-                    //2. load the register containing the value to be stored
+                    // 2. load the register containing the value to be stored
                     t86::RegOp *src = regMap_[instr->reg2];
                     addMOV(instr, dest, src);
                     break;
@@ -279,8 +258,7 @@ namespace tiny {
                     break;
                 }
                 default:
-                    ;
-                    //NOT_IMPLEMENTED;
+                    NOT_IMPLEMENTED;
             }
         }
 
@@ -292,22 +270,20 @@ namespace tiny {
                     break;
                 }
                 default:
-                    ;
-                    //NOT_IMPLEMENTED;
+                    NOT_IMPLEMENTED;
             }
         }
 
         void visit(il::Instruction::TerminatorReg* instr) override {
             switch (instr->opcode) {
                 case il::Opcode::RETR: {
-                    //we move the return value to the eax register
+                    // we move the return value to the eax register
                     addMOV(instr, new t86::RegOp(t86::EAX), regMap_[instr->reg]);
                     generateCdeclEpilogue();
                     break;
                 }
                 default:
-                    ;
-                    //NOT_IMPLEMENTED;
+                    NOT_IMPLEMENTED;
             }
         }
 
@@ -338,27 +314,27 @@ namespace tiny {
                     break;
                 }
                 default:
-                    ;
-                    //NOT_IMPLEMENTED;
+                    NOT_IMPLEMENTED;
             }
         }
 
         void visit(il::Instruction::RegRegs* instr) override {
             switch (instr->opcode) {
                 case il::Opcode::CALL: {
-                    //1. push all the arguments to the stack in reverse order
+                    // 1. push all the arguments to the stack in reverse order
                     for (auto it = instr->regs.rbegin(); it != instr->regs.rend(); ++it) {
+                        assert(regMap_.find(*it) != regMap_.end() && "Argument register not found");
                         (*this) += new t86::PUSHIns(regMap_[*it]);
                     }
-                    //2. call the function
-                    il::Instruction::ImmS *sfun = dynamic_cast<il::Instruction::ImmS *>(instr->reg);
+                    // 2. call the function
+                    auto *sfun = dynamic_cast<il::Instruction::ImmS *>(instr->reg);
                     assert(sfun && "Currently we only support calls via symbols");
                     (*this) += new t86::CALLIns(
                             new t86::LabelOp(sfun->value.name())
                     );
-                    //3. clean up the stack b
-                    //TODO we assume constant size of the arguments
-                    //this wouldn't work for structs, probably chars etc..
+                    // 3. clean up the stack b
+                    // TODO we assume constant size of the arguments
+                    // this wouldn't work for structs, etc..
                     (*this) += new t86::ADDIns(
                             new t86::RegOp(t86::SP),
                             new t86::ImmOp(instr->regs.size())

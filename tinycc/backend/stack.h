@@ -37,12 +37,14 @@ namespace tiny {
         }
 
         int allocate(il::Instruction const *var, size_t size) {
+            assert(offsets_.find(var) == offsets_.end());
             offsets_.emplace(var, offset_);
             offset_ += normalize(size);
             return -offsets_.at(var);
         }
 
         int getOffset(il::Instruction const *var) const {
+            assert(offsets_.find(var) != offsets_.end());
             return -offsets_.at(var);
         }
 

@@ -96,10 +96,6 @@ namespace tiny::il {
                 translate(ast->value);
                 (*this) += ST(lvalue, lastResult_, ast);
             }
-            else {
-                //TODO initialize to default value based on the type?
-            }
-
         }
 
         /** Enter a new function.
@@ -119,7 +115,7 @@ namespace tiny::il {
                     Instruction * addr = addVariable(name, static_cast<int64_t>(ast->args[i].first->type()->size()));
                     (*this) += ST(addr, arg);
                 } else {
-                    contexts_.back().locals.insert(std::make_pair(name, arg));
+                    currentContext().locals.insert(std::make_pair(name, arg));
                 }
             }
             translate(ast->body);
@@ -143,7 +139,6 @@ namespace tiny::il {
             BasicBlock *elseBB = f_->addBasicBlock(STR("else"));
             BasicBlock *mergeBB = f_->addBasicBlock(STR("if-else-merge"));
 
-            //TODO maybe add something like TEST? or something similar like icmp in LLVM?
             Instruction *isZero = lastResult_;
             (*this) += BR(isZero, thenBB, elseBB, ast);
 
@@ -153,10 +148,6 @@ namespace tiny::il {
             translate(ast->trueCase);
             (*this) += JMP(mergeBB, ast);
 
-            //TODO we enter the basic block here, but if the if-else contain blocks themself
-            // then we jump to this BB and inside the block we just enter a new BB
-            // will probably be easy to optimize away later
-            // Process 'else' block
             enterBasicBlock(elseBB);
             if (ast->falseCase)
                 translate(ast->falseCase);
@@ -231,8 +222,8 @@ namespace tiny::il {
         }
 
         void visit(ASTBreak* ast) override {
-            assert(contexts_.back().breakBlock && "Lacking break block");
-            (*this) += JMP(contexts_.back().breakBlock, ast);
+            assert(currentContext().breakBlock && "Lacking break block");
+            (*this) += JMP(currentContext().breakBlock, ast);
             //TODO kinda wierd, interpreter didn't work without it
             //we end the basic block here, but the rest still needs to get compiled
             //thus we create a new basic block (but it will be unreachable)
@@ -240,8 +231,8 @@ namespace tiny::il {
         }
 
         void visit(ASTContinue* ast) override {
-            assert(contexts_.back().continueBlock && "Lacking continue block");
-            (*this) += JMP(contexts_.back().continueBlock, ast);
+            assert(currentContext().continueBlock && "Lacking continue block");
+            (*this) += JMP(currentContext().continueBlock, ast);
             //TODO kinda wierd, interpreter didn't work without it
             //we end the basic block here, but the rest still needs to get compiled
             //thus we create a new basic block (but it will be unreachable)
@@ -293,6 +284,7 @@ namespace tiny::il {
 
         void visit(ASTUnaryOp* ast) override {
             //TODO now we assume that the op is minus
+            assert(ast->op == Symbol::Sub && "Only unary minus is supported");
             auto *zero = LDI(RegType::Int, 0);
             (*this) +=  zero;
             translate(ast->arg);
@@ -420,7 +412,7 @@ namespace tiny::il {
             Instruction * fReg = FUN(name,name.name());
             p_.globals()->append(fReg);
             bb_ = f_->addBasicBlock("entry");
-            contexts_.push_back(Context{bb_});
+            contexts_.emplace_back(bb_);
             contexts_.front().locals.insert(std::make_pair(name, fReg));
             return f_;
         }
@@ -437,15 +429,15 @@ namespace tiny::il {
             if (! bb_->terminated())
                 bb_->append(JMP(locals));
             bb_ = bb;
-            contexts_.emplace_back(locals, bb_, contexts_.back().breakBlock,
-                                   contexts_.back().continueBlock);
+            contexts_.emplace_back(locals, bb_, currentContext().breakBlock,
+                                   currentContext().continueBlock);
         }
 
         void leaveBlock() {
-            BasicBlock * locals = contexts_.back().localsBlock;
-            BasicBlock * firstBB = contexts_.back().firstBB;
+            BasicBlock * locals = currentContext().localsBlock;
+            BasicBlock * firstBB = currentContext().firstBB;
             locals->append(JMP(firstBB));
-            f_->updateLocalsSize(-contexts_.back().sizeOfLocals);
+            f_->updateLocalsSize(-currentContext().sizeOfLocals);
             contexts_.pop_back();
         }
 
@@ -460,8 +452,8 @@ namespace tiny::il {
             assert(bb && "null basic block");
             assert(!bb->terminated() && "basic block already terminated");
             bb_ = bb;
-            contexts_.back().continueBlock = continueBB;
-            contexts_.back().breakBlock = breakBB;
+            currentContext().continueBlock = continueBB;
+            currentContext().breakBlock = breakBB;
             return bb_;
         }
 
@@ -469,11 +461,11 @@ namespace tiny::il {
          *  current block's local definitions basic block and the register containing the address is returned.
          */
         Instruction * addVariable(Symbol name, size_t size) {
-            Instruction * res = contexts_.back().localsBlock->append( ALLOCA( RegType::Int,
+            Instruction * res = currentContext().localsBlock->append( ALLOCA( RegType::Int,
                                                                               static_cast<int64_t>(size), name.name()));
             f_->updateLocalsSize(size);
-            contexts_.back().sizeOfLocals += size;
-            contexts_.back().locals.insert(std::make_pair(name, res));
+            currentContext().sizeOfLocals += size;
+            currentContext().locals.insert(std::make_pair(name, res));
             return res;
         }
 
@@ -483,11 +475,16 @@ namespace tiny::il {
         Instruction * getVariable(Symbol name) {
             for (size_t i = contexts_.size() - 1, e = contexts_.size(); i < e; --i) {
                 auto it = contexts_[i].locals.find(name);
-                if (it != contexts_[i].locals.end())
+                if (it != contexts_[i].locals.end()) {
+                    assert(it->second->opcode == Opcode::ALLOCA ||
+                           it->second->opcode == Opcode::FUN);
                     return it->second;
+                }
             }
             return nullptr;
         ;}
+
+        Context &currentContext() { return contexts_.back(); }
 
         Program p_;
         std::vector<Context> contexts_;
