@@ -213,6 +213,7 @@ namespace tiny {
             auto movIns = dynamic_cast<t86::MOVIns *>(i);
             if (movIns == nullptr) return false;
             auto source = movIns->operand2_;
+            if (!dynamic_cast<t86::MemRegOffsetOp *>(source)) return false;
             auto next = getInstruction();
             auto nextMovIns = dynamic_cast<t86::MOVIns *>(next);
             if (nextMovIns == nullptr) return false;
