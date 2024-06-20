@@ -61,10 +61,10 @@ namespace tiny {
 
         // get indexes of the nth instruction
         // n represents position in the window
-        std::pair<size_t, size_t> getNthIndices(size_t n) {
+        std::pair<size_t, size_t> getIndexesForNthInstr(size_t n) {
             size_t bb = bbIndex_;
             size_t instr = instrIndex_;
-            while (n > 0) {
+            while (n > 1) {
                 if (instr >= bbs_->operator[](bb)->size()) {
                     instr = 0;
                     bb++;
@@ -143,7 +143,7 @@ namespace tiny {
         }
 
         void remove(size_t n, t86::Instruction *expected) {
-            auto [bb, instr] = getNthIndices(n);
+            auto [bb, instr] = getIndexesForNthInstr(n);
             removeInstruction(bb, instr, expected);
         }
 
