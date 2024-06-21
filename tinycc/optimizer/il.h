@@ -736,7 +736,7 @@ namespace tiny::il {
         // gets called when we allocate space for a local variable, size is the size of the variable in bytes
         // when we leave a block, then call this function with negative size
         void updateLocalsSize(int size) {
-            assert((size == 0 || size == 8 || size < 0) && "currently we only support 8 byte variables");
+            assert((size <= 8) && "currently we only support max 8 byte variables");
             localsSize_ += size;
             if (localsSize_ > localsMaxSize_)
                 localsMaxSize_ = localsSize_;

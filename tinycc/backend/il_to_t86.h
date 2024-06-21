@@ -111,12 +111,14 @@ namespace tiny {
                                                      new t86::ImmOp(stackSize));
             // currently we have a primitive way of handling function arguments
             // - the caller pushes the arguments on the stack
-            // - the callee then MOVs the arguments from the stack to the function's stack frame
+            // - the callee then MOVs the arguments from the stack to the function's stack frame (the immediate
+            //   value represents the offset of the argument)
             // - the callee then uses the arguments from the stack frame
             // - additionally we assume that all the arguments have fixed size
-            // - this is all done as part of the function prologue
             for (size_t i = 0; i < ilf_->numArgs(); ++i) {
+                // the immediate value represents the offset of the arg
                 auto *instr = dynamic_cast<il::Instruction::ImmI*>(const_cast<il::Instruction *>(ilf_->getArg(i)));
+                assert(instr && "Argument is not an immediate instruction");
                 // allocate new register for the argument
                 // then move the argument from the stack to the register
                 // add REG_TO_MEM_WORD because we have to skip the return address
@@ -124,8 +126,9 @@ namespace tiny {
                 //  ARG0     <- BP + 2
                 //  RET ADDR <- BP + 1
                 //  OLD BP   <- BP, SP
-                addMOV(instr, new t86::RegOp(regAllocator_.allocate()),
-                       new t86::MemRegOffsetOp(t86::BP, REG_TO_MEM_WORD + instr->value + 1));
+                auto dest = new t86::RegOp(regAllocator_.allocate());
+                auto src = new t86::MemRegOffsetOp(t86::BP, REG_TO_MEM_WORD + instr->value + 1);
+                addMOV(instr, dest, src);
             }
         }
 
@@ -171,14 +174,15 @@ namespace tiny {
             switch (instr->opcode) {
                 case il::Opcode::LDI: {
                     // Direct translation of IR's LDI to x86's MOV instruction.
-                    addMOV(instr, new t86::RegOp(regAllocator_.allocate()), new t86::ImmOp(instr->value));
+                    auto dest = new t86::RegOp(regAllocator_.allocate());
+                    auto src = new t86::ImmOp(instr->value);
+                    addMOV(instr, dest, src);
                     break;
                 }
                 case il::Opcode::ALLOCA: {
                     // we allocate new local variable on the stack
                     // the alloca instruction is then accompanied by a store instruction,
                     // in ast_to_il we have: (*this) += ST(addr, arg);, the alloca represents the addr
-                    // which initializes the variable to appropriate value
                     (void)stackAllocator_.allocate(instr, instr->value);
                     //TODO enable this assert
                     //assert(stackAllocator_.getStackSize() <= f_->getStackSize(true));
@@ -186,11 +190,8 @@ namespace tiny {
                 }
 
                 case il::Opcode::ARG: {
-                    /*il::Instruction::ImmI *i = dynamic_cast<il::Instruction::ImmI*>(instr);
-                    addMOV(instr, new RegOp(regAllocator_.allocate()),*
-                                      new MemRegOffsetOp(regAllocator_.getBP(), REG_TO_MEM_WORD + i->value + 1));*/
-                    //handled directly in the prologue
-                    break;
+                    // we handle arguments in the prologue where we allocate offsets for them on the stack
+                    UNREACHABLE;
                 }
 
                 default: {
@@ -202,8 +203,9 @@ namespace tiny {
         void visit(il::Instruction::Reg* instr) override {
             switch (instr->opcode) {
                 case il::Opcode::LD: {
-                    addMOV(instr, new t86::RegOp(regAllocator_.allocate()),
-                                  new t86::MemRegOffsetOp(t86::BP, stackAllocator_.getOffset(instr->reg)));
+                    auto dest = new t86::RegOp(regAllocator_.allocate());
+                    auto src = new t86::MemRegOffsetOp(t86::BP, stackAllocator_.getOffset(instr->reg));
+                    addMOV(instr, dest, src);
                     break;
                 }
                 default:
@@ -239,8 +241,8 @@ namespace tiny {
 
                 case il::Opcode::ST: {
                     // 1. fetch the address of the target variable
-                    auto *dest = new t86::MemRegOffsetOp(t86::BP,
-                                                              stackAllocator_.getOffset(instr->reg1));
+                    auto offset = stackAllocator_.getOffset(instr->reg1);
+                    auto *dest = new t86::MemRegOffsetOp(t86::BP, offset);
                     // 2. load the register containing the value to be stored
                     t86::RegOp *src = regMap_[instr->reg2];
                     addMOV(instr, dest, src);

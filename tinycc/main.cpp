@@ -38,9 +38,24 @@ struct TestResult {
     size_t typecheck_fails = 0;
 };
 
-bool testIRProgram(il::Program const & p, Test const * test) {
-    if (test->marked)
+template <typename ProgramType>
+void printProgram(ProgramType const &p, bool withAddr = false) {
+    if constexpr (std::is_same_v<ProgramType, il::Program>) {
         std::cout << ColorPrinter::colorize(p) << std::endl;
+    } else if constexpr (std::is_same_v<ProgramType, t86::Program>) {
+        std::cout << p.toString(withAddr) << std::endl;
+    } else {
+        UNREACHABLE;
+    }
+}
+
+
+
+bool testIRProgram(il::Program const & p, Test const * test) {
+    if (test->marked) {
+        std::cout << "running the following program in IL interpreter:"  << std::endl;
+        printProgram(p);
+    }
     int64_t result = il::ILInterpreter::run(p);
     if (result != test->result) {
         std::cerr << "ERROR: expected " << test->result << ", got " << result << color::reset << std::endl;
@@ -86,7 +101,7 @@ bool testASMProgram(t86::Program const & p, Test const * test) {
     std::string result = runVM(p);
     if (test->marked) {
         std::cout << "running the following program in VM:"  << std::endl;
-        std::cout << p.toString(true) << std::endl;
+        printProgram(p, true);
         std::cout << "vm result: " << result << std::endl;
     }
     if (stoi(result) != test->result) {
@@ -120,15 +135,17 @@ bool compile(std::string const & contents, Test const * test, TestResult *result
         t86::Program t86Program = T86CodeGen::translateProgram(p);
         if (Options::verboseASM) {
             std::cout << "after translation to t86: \n";
-            std::cout << t86Program.toString(true) << std::endl;
+            printProgram(t86Program, true);
         }
 
         // register allocation
         t86::BeladyRegAllocator::allocatePhysicalRegs(t86Program, Options::numRegisters);
-        if (Options::verboseASM)
-           std::cout << t86Program.toString(true) << std::endl;
+        if (Options::verboseASM) {
+            std::cout << "after register allocation: \n";
+            std::cout << t86Program.toString(true) << std::endl;
+        }
 
-        //Optimizer::optimize(t86Program);
+        Optimizer::optimize(t86Program);
         //std::cout << t86Program.toString(false) << std::endl;
 
         Assembler::assemble(t86Program);

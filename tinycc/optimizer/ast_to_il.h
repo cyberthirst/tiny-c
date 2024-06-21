@@ -1,5 +1,8 @@
 #pragma once
 
+#include <algorithm>
+#include <vector>
+
 #include "common/types.h"
 #include "frontend/ast.h"
 #include "il.h"
@@ -461,8 +464,8 @@ namespace tiny::il {
          *  current block's local definitions basic block and the register containing the address is returned.
          */
         Instruction * addVariable(Symbol name, size_t size) {
-            Instruction * res = currentContext().localsBlock->append( ALLOCA( RegType::Int,
-                                                                              static_cast<int64_t>(size), name.name()));
+            auto alloc = ALLOCA(RegType::Int, static_cast<int64_t>(size), name.name());
+            Instruction * res = currentContext().localsBlock->append(alloc);
             f_->updateLocalsSize(size);
             currentContext().sizeOfLocals += size;
             currentContext().locals.insert(std::make_pair(name, res));
@@ -472,17 +475,20 @@ namespace tiny::il {
         /** Returns the register that holds the address of variable with given name. The address can then be used to
          *  load/store its contents.
          */
-        Instruction * getVariable(Symbol name) {
-            for (size_t i = contexts_.size() - 1, e = contexts_.size(); i < e; --i) {
-                auto it = contexts_[i].locals.find(name);
-                if (it != contexts_[i].locals.end()) {
-                    assert(it->second->opcode == Opcode::ALLOCA ||
-                           it->second->opcode == Opcode::FUN);
-                    return it->second;
-                }
+        Instruction* getVariable(Symbol name) {
+            auto it = std::find_if(contexts_.rbegin(),
+                                   contexts_.rend(), [&name](const auto& context) {
+                return context.locals.find(name) != context.locals.end();
+            });
+
+            if (it != contexts_.rend()) {
+                auto varIt = it->locals.find(name);
+                auto opcode = varIt->second->opcode;
+                assert(opcode == Opcode::ALLOCA || opcode == Opcode::FUN);
+                return varIt->second;
             }
             return nullptr;
-        ;}
+        }
 
         Context &currentContext() { return contexts_.back(); }
 
